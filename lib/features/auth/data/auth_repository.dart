@@ -30,12 +30,19 @@ class AuthRepository {
       final response = await _dio.post(
         '/auth/login',
         data: {'email': email.trim(), 'password': password},
+        options: Options(followRedirects: false),
       );
 
       if (response.data is! Map) {
         throw const FormatException('Phản hồi đăng nhập không hợp lệ');
       }
 
+      final issuer = response.requestOptions.baseUrl;
+      if (issuer != _dio.options.baseUrl) {
+        throw const FormatException(
+          'The backend address changed. Sign in again.',
+        );
+      }
       final data = Map<String, dynamic>.from(response.data as Map);
       final accessToken = data['accessToken']?.toString();
       final refreshToken = data['refreshToken']?.toString();
@@ -58,10 +65,7 @@ class AuthRepository {
 
       await _secureStorage.write(
         key: _keyAccessToken,
-        value: jsonEncode({
-          'token': accessToken,
-          'endpoint': response.requestOptions.baseUrl,
-        }),
+        value: jsonEncode({'token': accessToken, 'endpoint': issuer}),
       );
       await _secureStorage.write(key: _keyRefreshToken, value: refreshToken);
       await _secureStorage.write(key: _keyUserRole, value: role);
@@ -88,14 +92,18 @@ class AuthRepository {
   }
 
   Future<Map<String, String?>> getStoredUserData() async {
-    final accessToken = (await _readAccessSession())?.token;
+    final session = await _readAccessSession();
+    if (session == null || session.endpoint != _dio.options.baseUrl) {
+      return const {};
+    }
     final role = await _secureStorage.read(key: _keyUserRole);
     final email = await _secureStorage.read(key: _keyUserEmail);
     final name = await _secureStorage.read(key: _keyUserName);
     final employeeCode = await _secureStorage.read(key: _keyEmployeeCode);
 
+    if (session.endpoint != _dio.options.baseUrl) return const {};
     return {
-      'accessToken': accessToken,
+      'accessToken': session.token,
       'role': role,
       'email': email,
       'name': name,

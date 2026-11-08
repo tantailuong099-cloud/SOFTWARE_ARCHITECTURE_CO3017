@@ -17,6 +17,7 @@ void main() {
       final repository = AuthRepository(dio);
       await repository.login('fixture@example.org', 'fixture-password');
       dio.options.baseUrl = 'https://replacement.example.org/api';
+      expect(await repository.getStoredUserData(), isEmpty);
 
       await repository.logout();
 
@@ -44,6 +45,7 @@ void main() {
 
       await repository.logout();
 
+      expect(requests.first.followRedirects, isFalse);
       expect(requests.last.path, '/auth/logout');
       expect(requests.last.followRedirects, isFalse);
       expect(requests.last.headers['Authorization'], 'Bearer fixture-token');

@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
+import 'package:tmc_gate_app/core/config/api_endpoint_settings.dart';
 import 'package:tmc_gate_app/features/auth/data/auth_repository.dart';
 
 final authNotifierProvider = NotifierProvider<AuthNotifier, AuthState>(() {
@@ -51,95 +54,123 @@ class AuthState {
 }
 
 class AuthNotifier extends Notifier<AuthState> {
-  late final AuthRepository _authRepository;
+  late AuthRepository _authRepository;
   bool _hasCheckedSavedSession = false;
-  bool _isLoggingIn = false;
+  int _generation = 0;
+  Future<void> _operations = Future<void>.value();
 
   @override
   AuthState build() {
-    _authRepository = ref.watch(authRepositoryProvider);
-    // Trigger initial check asynchronously
-    Future.microtask(() => checkSavedSession());
+    final repository = ref.watch(authRepositoryProvider);
+    _authRepository = repository;
+    final generation = ++_generation;
+    _hasCheckedSavedSession = false;
+    ref.listen(apiEndpointSettingsProvider, (previous, next) {
+      if (previous == null || previous == next) return;
+      _generation++;
+      _hasCheckedSavedSession = true;
+      state = AuthState();
+      // Clear old credentials after any in-flight auth write and before the next login.
+      unawaited(_enqueue(() => _clearStoredSession(repository)));
+    });
+    unawaited(
+      Future<void>.microtask(() async {
+        if (_isCurrent(generation)) await checkSavedSession();
+      }),
+    );
     return AuthState(isLoading: true);
   }
 
-  Future<void> checkSavedSession() async {
-    if (_hasCheckedSavedSession) return;
+  Future<void> checkSavedSession() {
+    if (_hasCheckedSavedSession) return Future<void>.value();
+    _hasCheckedSavedSession = true;
+    final generation = _generation;
+    final repository = _authRepository;
+    return _enqueue(() async {
+      if (!_isCurrent(generation)) return;
+      try {
+        final data = await repository.getStoredUserData();
+        if (!_isCurrent(generation)) return;
+        final token = data['accessToken'];
+        state = token == null
+            ? AuthState()
+            : AuthState(
+                isAuthenticated: true,
+                accessToken: token,
+                role: data['role'],
+                email: data['email'],
+                name: data['name'],
+                employeeCode: data['employeeCode'],
+              );
+      } catch (_) {
+        if (_isCurrent(generation)) state = AuthState();
+      }
+    });
+  }
+
+  Future<bool> login(String email, String password) {
+    final generation = ++_generation;
+    final repository = _authRepository;
+    _hasCheckedSavedSession = true;
+    state = AuthState(isLoading: true);
+    return _enqueue(() async {
+      if (!_isCurrent(generation)) return false;
+      try {
+        await repository.clearStoredSession();
+        if (!_isCurrent(generation)) return false;
+        final result = await repository.login(email, password);
+        if (!_isCurrent(generation)) return false;
+        final user = Map<String, dynamic>.from(result['user'] as Map);
+        state = AuthState(
+          isAuthenticated: true,
+          accessToken: result['accessToken'],
+          role: result['role'],
+          email: user['email'],
+          name: user['fullName'],
+          employeeCode: user['employeeCode'],
+        );
+        return true;
+      } catch (error) {
+        if (!_isCurrent(generation)) return false;
+        await _clearStoredSession(repository);
+        if (_isCurrent(generation)) {
+          state = AuthState(
+            errorMessage: error.toString().replaceAll('Exception: ', ''),
+          );
+        }
+        return false;
+      }
+    });
+  }
+
+  Future<void> logout() {
+    final generation = ++_generation;
+    final repository = _authRepository;
     _hasCheckedSavedSession = true;
     state = state.copyWith(isLoading: true);
-    try {
-      final data = await _authRepository.getStoredUserData();
-      if (_isLoggingIn || state.isAuthenticated) return;
-      final token = data['accessToken'];
-      if (token != null && token.isNotEmpty) {
-        debugPrint('[Auth] Restored saved session for ${data['email']}');
-        state = state.copyWith(
-          isAuthenticated: true,
-          accessToken: token,
-          role: data['role'],
-          email: data['email'],
-          name: data['name'],
-          employeeCode: data['employeeCode'],
-          isLoading: false,
-        );
-      } else {
-        debugPrint('[Auth] No saved session. Authentication required.');
-        state = state.copyWith(isLoading: false, isAuthenticated: false);
+    return _enqueue(() async {
+      if (!_isCurrent(generation)) return;
+      try {
+        await repository.logout();
+      } finally {
+        if (_isCurrent(generation)) state = AuthState();
       }
-    } catch (e) {
-      debugPrint('[Auth] Failed to restore session: $e');
-      state = state.copyWith(isLoading: false, isAuthenticated: false);
-    }
+    });
   }
 
-  Future<bool> login(String email, String password) async {
-    debugPrint('[Auth] Login requested for $email');
-    _isLoggingIn = true;
-    await _authRepository.clearStoredSession();
-    state = AuthState(
-      isLoading: true,
-      isAuthenticated: false,
-      accessToken: null,
-      errorMessage: null,
-    );
+  bool _isCurrent(int generation) => ref.mounted && generation == _generation;
+
+  Future<T> _enqueue<T>(Future<T> Function() action) {
+    final operation = _operations.then((_) => action());
+    _operations = operation.then<void>((_) {}, onError: (Object _) {});
+    return operation;
+  }
+
+  Future<void> _clearStoredSession(AuthRepository repository) async {
     try {
-      final result = await _authRepository.login(email, password);
-      final rawUser = result['user'];
-      final user = rawUser is Map<String, dynamic>
-          ? rawUser
-          : Map<String, dynamic>.from(rawUser as Map);
-      state = state.copyWith(
-        isLoading: false,
-        isAuthenticated: true,
-        accessToken: result['accessToken'],
-        role: result['role'],
-        email: user['email'],
-        name: user['fullName'],
-        employeeCode: user['employeeCode'],
-      );
-      debugPrint(
-        '[Auth Success] User "${user['email']}" (${user['role']}) authenticated.',
-      );
-      return true;
-    } catch (e) {
-      debugPrint('[Auth Failed] Login failed for $email: $e');
-      await _authRepository.clearStoredSession();
-      state = AuthState(
-        isLoading: false,
-        isAuthenticated: false,
-        accessToken: null,
-        errorMessage: e.toString().replaceAll('Exception: ', ''),
-      );
-      return false;
-    } finally {
-      _isLoggingIn = false;
+      await repository.clearStoredSession();
+    } catch (_) {
+      debugPrint('Could not clear the stored authentication session.');
     }
-  }
-
-  Future<void> logout() async {
-    debugPrint('[Auth] Logout requested.');
-    state = state.copyWith(isLoading: true);
-    await _authRepository.logout();
-    state = AuthState(); // reset to unauthenticated
   }
 }
