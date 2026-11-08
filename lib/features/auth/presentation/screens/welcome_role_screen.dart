@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tmc_gate_app/features/auth/presentation/providers/auth_provider.dart';
 
 class WelcomeRoleScreen extends ConsumerWidget {
@@ -120,16 +121,18 @@ class WelcomeRoleScreen extends ConsumerWidget {
                                       : Colors.teal[700],
                                 ),
                                 const SizedBox(width: 8),
-                                Text(
-                                  isAdmin
-                                      ? 'Quyền Hạn: Quản trị viên (ADMIN)'
-                                      : 'Quyền Hạn: Nhân viên (EMPLOYEE)',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: isAdmin
-                                        ? Colors.indigo[900]
-                                        : Colors.teal[900],
+                                Flexible(
+                                  child: Text(
+                                    isAdmin
+                                        ? 'Quyền Hạn: Quản trị viên (ADMIN)'
+                                        : 'Quyền Hạn: Nhân viên (EMPLOYEE)',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: isAdmin
+                                          ? Colors.indigo[900]
+                                          : Colors.teal[900],
+                                    ),
                                   ),
                                 ),
                               ],
@@ -183,6 +186,15 @@ class WelcomeRoleScreen extends ConsumerWidget {
                         ],
                       ),
                       const SizedBox(height: 24),
+
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: () => context.goNamed('dashboard'),
+                          child: const Text('Open dashboard'),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
 
                       // Logout button
                       SizedBox(

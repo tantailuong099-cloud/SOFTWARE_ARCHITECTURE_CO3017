@@ -316,7 +316,7 @@ class _GateStationKioskScreenState
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).primaryColor,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleRadius(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
                 ],

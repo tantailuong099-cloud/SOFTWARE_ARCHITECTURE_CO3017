@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import '../../data/gate_station_repository.dart';
 import '../../data/models/access_scan_models.dart';
 
