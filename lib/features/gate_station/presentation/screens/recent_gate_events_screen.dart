@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/models/access_scan_models.dart'
-    show AccessDecision, ControllerOutcome, GateDirection;
-import '../../data/models/recent_gate_event_model.dart';
+import '../../domain/gate_event_types.dart';
+import '../../domain/recent_gate_event.dart';
 import '../../domain/recent_gate_events_source.dart';
 import '../providers/gate_station_provider.dart';
 import '../providers/recent_gate_events_controller.dart';

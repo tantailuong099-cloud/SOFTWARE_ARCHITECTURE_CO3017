@@ -66,7 +66,7 @@ void main() {
       expect(subscription.read().error, RecentEventsFailure.unavailable);
 
       expect(container.refresh(recentGateEventsProvider).isLoading, isTrue);
-      if (useFake) fake.complete(2, [eventJson()]);
+      if (useFake) fake.complete(2, [recordedEvent()]);
       final events = await container.read(recentGateEventsProvider.future);
       expect(events?.single.eventId, 'event-a');
       expect(transportRequests, useFake ? 0 : 3);
@@ -91,10 +91,12 @@ void main() {
       'BD-GATE-01',
     ]);
 
-    fake.complete(2, [eventJson(eventId: 'new-a')]);
+    fake.complete(2, [recordedEvent(eventId: 'new-a')]);
     await container.read(recentGateEventsProvider.future);
-    fake.complete(1, [eventJson(eventId: 'stale-b', stationId: 'LA-GATE-01')]);
-    fake.complete(0, [eventJson(eventId: 'stale-a')]);
+    fake.complete(1, [
+      recordedEvent(eventId: 'stale-b', stationId: 'LA-GATE-01'),
+    ]);
+    fake.complete(0, [recordedEvent(eventId: 'stale-a')]);
     await container.pump();
 
     expect(subscription.read().requireValue?.single.eventId, 'new-a');
@@ -109,10 +111,10 @@ void main() {
     expect(container.refresh(recentGateEventsProvider).isLoading, isTrue);
     expect(container.refresh(recentGateEventsProvider).isLoading, isTrue);
 
-    fake.complete(2, [eventJson(eventId: 'latest')]);
+    fake.complete(2, [recordedEvent(eventId: 'latest')]);
     await container.read(recentGateEventsProvider.future);
     fake.fail(1, RecentEventsFailure.unavailable);
-    fake.complete(0, [eventJson(eventId: 'oldest')]);
+    fake.complete(0, [recordedEvent(eventId: 'oldest')]);
     await container.pump();
 
     expect(subscription.read().requireValue?.single.eventId, 'latest');

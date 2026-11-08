@@ -1,4 +1,4 @@
-import '../data/models/recent_gate_event_model.dart';
+import 'recent_gate_event.dart';
 
 /// Returns the station's server records in response order. An empty list
 /// represents a successful query. Retrieval failures throw [RecentEventsFailure].

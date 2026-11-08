@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/gate_station_repository.dart';
-import '../../data/models/recent_gate_event_model.dart';
+import '../../domain/recent_gate_event.dart';
 import '../../domain/recent_gate_events_source.dart';
 import 'gate_station_provider.dart';
 

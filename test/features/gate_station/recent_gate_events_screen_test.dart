@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tmc_gate_app/features/gate_station/data/gate_station_repository.dart';
-import 'package:tmc_gate_app/features/gate_station/data/models/access_scan_models.dart';
+import 'package:tmc_gate_app/features/gate_station/data/models/access_scan_models.dart'
+    show AccessScanResponse;
+import 'package:tmc_gate_app/features/gate_station/domain/gate_event_types.dart';
 import 'package:tmc_gate_app/features/gate_station/domain/recent_gate_events_source.dart';
 import 'package:tmc_gate_app/features/gate_station/presentation/providers/gate_station_provider.dart';
 import 'package:tmc_gate_app/features/gate_station/presentation/providers/recent_gate_events_controller.dart';
@@ -21,18 +23,22 @@ void main() {
         isEmpty,
       );
       source.complete(0, [
-        eventJson(outcome: 'CONTROLLER_FAILED'),
-        eventJson(eventId: 'event-unknown', outcome: 'CONTROLLER_UNKNOWN'),
-        eventJson(eventId: 'event-pending', outcome: 'CONTROLLER_PENDING'),
-        {
-          ...eventJson(
-            eventId: 'event-denied',
-            decision: 'DENIED',
-            outcome: 'NOT_APPLICABLE',
-          ),
-          'denialReason': 'CREDENTIAL_SUSPENDED',
-          'employeeName': null,
-        },
+        recordedEvent(outcome: ControllerOutcome.controllerFailed),
+        recordedEvent(
+          eventId: 'event-unknown',
+          outcome: ControllerOutcome.controllerUnknown,
+        ),
+        recordedEvent(
+          eventId: 'event-pending',
+          outcome: ControllerOutcome.controllerPending,
+        ),
+        recordedEvent(
+          eventId: 'event-denied',
+          decision: AccessDecision.denied,
+          outcome: ControllerOutcome.notApplicable,
+          denialReason: 'CREDENTIAL_SUSPENDED',
+          employeeName: null,
+        ),
       ]);
       await tester.pumpAndSettle();
 
@@ -52,7 +58,7 @@ void main() {
     'keeps only server records even when local history contains the same event',
     (tester) async {
       final source = await _openScreen(tester, withLocalHistory: true);
-      source.complete(0, [eventJson()]);
+      source.complete(0, [recordedEvent()]);
       await tester.pumpAndSettle();
 
       expect(find.text('Event ID: event-a'), findsOneWidget);
@@ -66,7 +72,7 @@ void main() {
     'clears old station events while the mounted screen loads the new station',
     (tester) async {
       final source = await _openScreen(tester);
-      source.complete(0, [eventJson()]);
+      source.complete(0, [recordedEvent()]);
       await tester.pumpAndSettle();
       expect(find.text('Event ID: event-a'), findsOneWidget);
 
@@ -79,7 +85,7 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
       source.complete(1, [
-        eventJson(eventId: 'event-b', stationId: 'LA-GATE-01'),
+        recordedEvent(eventId: 'event-b', stationId: 'LA-GATE-01'),
       ]);
       await tester.pumpAndSettle();
       expect(find.text('Event ID: event-b'), findsOneWidget);
@@ -109,7 +115,7 @@ void main() {
 
       await tester.tap(find.text('Retry'));
       await tester.pump();
-      source.complete(2, [eventJson(eventId: 'recovered')]);
+      source.complete(2, [recordedEvent(eventId: 'recovered')]);
       await tester.pumpAndSettle();
       expect(find.text('Event ID: recovered'), findsOneWidget);
 
@@ -128,7 +134,7 @@ void main() {
   ) async {
     final source = await _openScreen(tester);
     await tester.pumpWidget(const SizedBox.shrink());
-    source.complete(0, [eventJson()]);
+    source.complete(0, [recordedEvent()]);
     await tester.pump();
     expect(tester.takeException(), isNull);
   });

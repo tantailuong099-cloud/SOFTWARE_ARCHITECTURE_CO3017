@@ -1,14 +1,6 @@
-enum AccessDecision { approved, denied }
+import '../../domain/gate_event_types.dart' show AccessDecision;
 
-enum ControllerOutcome {
-  controllerConfirmed,
-  controllerFailed,
-  controllerUnknown,
-  controllerPending,
-  notApplicable,
-}
-
-enum GateDirection { entry, exit }
+export '../../domain/gate_event_types.dart';
 
 class SubmitScanRequest {
   final String requestId;

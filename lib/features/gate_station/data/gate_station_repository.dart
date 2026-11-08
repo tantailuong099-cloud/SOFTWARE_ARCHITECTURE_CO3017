@@ -1,9 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tmc_gate_app/core/network/dio_client.dart';
-import '../domain/recent_gate_events_source.dart';
 import 'models/access_scan_models.dart';
-import 'models/recent_gate_event_model.dart';
+
+import '../domain/recent_gate_event.dart';
+import '../domain/recent_gate_events_source.dart';
+import 'models/recent_gate_event_parser.dart';
 
 final gateStationRepositoryProvider = Provider<GateStationRepository>((ref) {
   final dio = ref.watch(dioProvider);
@@ -60,7 +62,7 @@ class GateStationRepository {
         if (row is! Map<String, dynamic>) {
           throw RecentEventsFailure.invalidResponse;
         }
-        final event = RecentGateEvent.fromJson(row);
+        final event = parseRecentGateEvent(row);
         if (event.stationId != stationId) {
           throw RecentEventsFailure.invalidResponse;
         }

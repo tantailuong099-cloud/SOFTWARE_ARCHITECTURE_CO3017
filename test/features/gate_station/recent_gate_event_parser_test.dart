@@ -1,12 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tmc_gate_app/features/gate_station/data/models/access_scan_models.dart';
-import 'package:tmc_gate_app/features/gate_station/data/models/recent_gate_event_model.dart';
+import 'package:tmc_gate_app/features/gate_station/domain/gate_event_types.dart';
+import 'package:tmc_gate_app/features/gate_station/data/models/recent_gate_event_parser.dart';
 
 import 'support/recent_events_fixture.dart';
 
 void main() {
   test('parses a recorded approval and confirmed controller outcome', () {
-    final event = RecentGateEvent.fromJson(eventJson());
+    final event = parseRecentGateEvent(eventJson());
 
     expect(event.eventId, 'event-a');
     expect(event.requestId, 'request-event-a');
@@ -26,7 +26,7 @@ void main() {
   test(
     'handles omitted and null optional fields and keeps the denial reason',
     () {
-      final event = RecentGateEvent.fromJson({
+      final event = parseRecentGateEvent({
         'eventId': 'event-denied',
         'stationId': 'LA-GATE-01',
         'serverTimestamp': '2026-11-08T01:23:45.000Z',
@@ -47,7 +47,7 @@ void main() {
   );
 
   test('treats future controller outcomes as unknown', () {
-    final event = RecentGateEvent.fromJson(
+    final event = parseRecentGateEvent(
       eventJson(outcome: 'CONTROLLER_ACK_DELAYED'),
     );
     expect(event.controllerOutcome, ControllerOutcome.controllerUnknown);
@@ -67,7 +67,7 @@ void main() {
       {'employeeId': []},
     ]) {
       expect(
-        () => RecentGateEvent.fromJson({...eventJson(), ...changes}),
+        () => parseRecentGateEvent({...eventJson(), ...changes}),
         throwsFormatException,
         reason: changes.toString(),
       );
