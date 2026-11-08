@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tmc_gate_app/core/config/api_config.dart';
 import 'package:tmc_gate_app/core/config/api_endpoint.dart';
 import 'package:tmc_gate_app/core/config/api_endpoint_settings.dart';
+import 'package:tmc_gate_app/core/network/dio_client.dart';
 import 'package:tmc_gate_app/features/gate_station/domain/station_configuration.dart';
 import 'package:tmc_gate_app/features/gate_station/domain/station_configuration_source.dart';
 import 'package:tmc_gate_app/features/gate_station/presentation/providers/gate_station_provider.dart';
@@ -87,6 +89,74 @@ void main() {
     expect(fixture.container.read(apiEndpointSettingsProvider), _default);
     expect(fixture.container.read(gateStationNotifierProvider), same(before));
     expect(fixture.store.url, isNull);
+  });
+
+  testWidgets('confirming a backend change keeps queued scans local', (
+    tester,
+  ) async {
+    const stationId = 'BD-GATE-02';
+    const keyFixture = 'station-key-fixture';
+    final requests = <RequestOptions>[];
+    final dio = DioClient.create(baseUrl: _default.value);
+    addTearDown(dio.close);
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          requests.add(options);
+          handler.resolve(
+            Response(
+              requestOptions: options,
+              statusCode: 200,
+              data: {
+                'stationId': options.path.split('/').last,
+                'factoryId': 'BINH_DUONG',
+                'gateIdentifier': 'Demo Gate',
+                'direction': 'EXIT',
+                'status': 'ACTIVE',
+                'stationApiKey': keyFixture,
+              },
+            ),
+          );
+        },
+      ),
+    );
+    final fixture = await _open(tester, dio: dio);
+    final gate = fixture.container.read(gateStationNotifierProvider.notifier);
+    gate.switchStation(stationId);
+    gate.toggleOfflineSimulation();
+    await gate.submitScan('offline-scan-fixture');
+    final queue = fixture.container
+        .read(gateStationNotifierProvider)
+        .offlineQueue;
+    await tester.pumpAndSettle();
+    requests.clear();
+
+    await tester.enterText(_apiField(), _alternate.value);
+    await tester.tap(find.text('Apply address'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('1 unsynchronized scans will stay in the queue'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Change address'));
+    await tester.pumpAndSettle();
+
+    final state = fixture.container.read(gateStationNotifierProvider);
+    expect(state.activeStation.stationId, stationId);
+    expect(state.offlineQueue, queue);
+    expect(fixture.store.url, _alternate.value);
+    expect(
+      find.text('Current API Base URL: ${_alternate.value}'),
+      findsOneWidget,
+    );
+    expect(find.textContaining(keyFixture), findsNothing);
+    final request = requests.single;
+    expect(request.method, 'GET');
+    expect(
+      request.uri,
+      Uri.parse('${_alternate.value}/gate-stations/$stationId'),
+    );
+    expect(request.data, isNull);
   });
 
   testWidgets(
@@ -293,6 +363,7 @@ Future<({ProviderContainer container, MemoryApiEndpointStore store})> _open(
   Size size = const Size(800, 1500),
   Future<StationConfiguration> Function(Ref ref, String stationId)? reader,
   StationAdministration? administration,
+  Dio? dio,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -304,10 +375,13 @@ Future<({ProviderContainer container, MemoryApiEndpointStore store})> _open(
       overrides: [
         defaultApiEndpointProvider.overrideWithValue(_default),
         apiEndpointStoreProvider.overrideWithValue(store),
-        stationConfigurationReaderProvider.overrideWith(
-          (ref) =>
-              (id) => reader?.call(ref, id) ?? Future.value(_station(id)),
-        ),
+        if (dio != null)
+          dioProvider.overrideWithValue(dio)
+        else
+          stationConfigurationReaderProvider.overrideWith(
+            (ref) =>
+                (id) => reader?.call(ref, id) ?? Future.value(_station(id)),
+          ),
         if (administration != null)
           stationAdministrationProvider.overrideWithValue(administration),
       ],
