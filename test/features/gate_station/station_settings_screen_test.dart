@@ -140,6 +140,17 @@ void main() {
     (tester) async {
       await _open(tester);
       await tester.pumpAndSettle();
+      expect(
+        find.textContaining(
+          'Edit draft starts from the local station selection',
+        ),
+        findsOneWidget,
+      );
+      final draftGate = tester.widget<TextField>(
+        find.widgetWithText(TextField, 'Gate identifier'),
+      );
+      expect(draftGate.controller?.text, 'Gate 01 - Main Entrance');
+      expect(find.text('Gate identifier: Remote main gate'), findsOneWidget);
       final validate = find.text('Validate draft');
       await tester.ensureVisible(validate);
       await tester.tap(validate);

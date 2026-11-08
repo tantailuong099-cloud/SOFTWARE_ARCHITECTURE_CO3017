@@ -146,6 +146,10 @@ class _StationAdministrationPanelState
             (value) => _factory = value,
           ),
         ] else ...[
+          const Text(
+            'Edit draft starts from the local station selection. '
+            'The backend configuration above may differ.',
+          ),
           Text('Station ID: ${widget.station.stationId}'),
           Text('Factory: ${widget.station.factoryId}'),
         ],
