@@ -34,7 +34,10 @@ void main() {
           overrides: [
             defaultApiEndpointProvider.overrideWithValue(_default),
             apiEndpointStoreProvider.overrideWithValue(store),
-            applyApiEndpointProvider.overrideWithValue(applied.add),
+            prepareApiEndpointProvider.overrideWithValue(
+              (endpoint) =>
+                  () => applied.add(endpoint),
+            ),
             dioProvider.overrideWith(
               (_) => throw StateError(
                 'Dio is unnecessary for this controller test',
@@ -76,6 +79,80 @@ void main() {
       },
     );
   }
+
+  test(
+    'failed preparation leaves persisted, effective, and displayed addresses intact',
+    () async {
+      final store = MemoryApiEndpointStore()..url = _default.value;
+      final container = ProviderContainer.test(
+        overrides: [
+          defaultApiEndpointProvider.overrideWithValue(_default),
+          apiEndpointStoreProvider.overrideWithValue(store),
+          prepareApiEndpointProvider.overrideWithValue((_) {
+            throw StateError('Endpoint preparation failed');
+          }),
+        ],
+      );
+      final dio = container.read(dioProvider);
+      await expectLater(
+        container.read(apiEndpointSettingsProvider.notifier).save(_changed),
+        throwsA(ApiEndpointUpdateFailure.application),
+      );
+      expect(await store.read(), _default.value);
+      expect(dio.options.baseUrl, _default.value);
+      expect(container.read(apiEndpointSettingsProvider), _default);
+    },
+  );
+
+  for (final rejectRollback in [false, true]) {
+    test(
+      'handles a partial storage write with rollback failure = $rejectRollback',
+      () async {
+        final store = _PartialWriteStore(rejectRollback: rejectRollback)
+          ..url = _default.value;
+        final container = ProviderContainer.test(
+          overrides: [
+            defaultApiEndpointProvider.overrideWithValue(_default),
+            apiEndpointStoreProvider.overrideWithValue(store),
+          ],
+        );
+        final dio = container.read(dioProvider);
+        await expectLater(
+          container.read(apiEndpointSettingsProvider.notifier).save(_changed),
+          throwsA(
+            rejectRollback
+                ? ApiEndpointUpdateFailure.persistenceUncertain
+                : ApiEndpointUpdateFailure.persistence,
+          ),
+        );
+        expect(
+          await store.read(),
+          rejectRollback ? _changed.value : _default.value,
+        );
+        expect(dio.options.baseUrl, _default.value);
+        expect(container.read(apiEndpointSettingsProvider), _default);
+      },
+    );
+  }
+
+  test('detects a silently dropped preference write', () async {
+    final preferences = _MockPreferences(() => false, ignoreWrites: true);
+    final store = PreferencesApiEndpointStore(preferences);
+    final container = ProviderContainer.test(
+      overrides: [
+        defaultApiEndpointProvider.overrideWithValue(_default),
+        apiEndpointStoreProvider.overrideWithValue(store),
+      ],
+    );
+    final dio = container.read(dioProvider);
+    await expectLater(
+      container.read(apiEndpointSettingsProvider.notifier).save(_changed),
+      throwsA(ApiEndpointUpdateFailure.persistence),
+    );
+    expect(await store.read(), isNull);
+    expect(dio.options.baseUrl, _default.value);
+    expect(container.read(apiEndpointSettingsProvider), _default);
+  });
 
   test('restores default for corrupt configuration', () async {
     final store = MemoryApiEndpointStore()
@@ -158,12 +235,30 @@ void main() {
   );
 }
 
+class _PartialWriteStore extends MemoryApiEndpointStore {
+  final bool rejectRollback;
+
+  _PartialWriteStore({required this.rejectRollback});
+
+  @override
+  Future<void> save(String? url) async {
+    if (url == _changed.value) {
+      this.url = url;
+      throw StateError('Storage reported failure after updating the value');
+    }
+    if (rejectRollback) throw StateError('Rollback rejected');
+    await super.save(url);
+  }
+}
+
 class _MockPreferences implements SharedPreferencesAsync {
   final _values = <String, String>{};
   final keys = <String>{};
   final bool Function() rejectWrites;
 
-  _MockPreferences(this.rejectWrites);
+  final bool ignoreWrites;
+
+  _MockPreferences(this.rejectWrites, {this.ignoreWrites = false});
 
   @override
   Future<String?> getString(String key) async => _values[key];
@@ -172,7 +267,7 @@ class _MockPreferences implements SharedPreferencesAsync {
   Future<void> setString(String key, String value) async {
     if (rejectWrites()) throw StateError('Platform write rejected');
     keys.add(key);
-    _values[key] = value;
+    if (!ignoreWrites) _values[key] = value;
   }
 
   @override

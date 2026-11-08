@@ -128,7 +128,7 @@ void main() {
       final container = ProviderContainer.test(
         overrides: [
           apiEndpointStoreProvider.overrideWithValue(MemoryApiEndpointStore()),
-          applyApiEndpointProvider.overrideWithValue((_) {}),
+          prepareApiEndpointProvider.overrideWithValue((_) => () {}),
           stationConfigurationReaderProvider.overrideWithValue((id) {
             final result = Completer<StationConfiguration>();
             requests.add((stationId: id, result: result));

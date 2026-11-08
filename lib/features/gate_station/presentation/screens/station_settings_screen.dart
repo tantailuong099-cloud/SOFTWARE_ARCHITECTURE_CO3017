@@ -77,7 +77,7 @@ class _StationSettingsScreenState extends ConsumerState<StationSettingsScreen> {
           builder: (context) => AlertDialog(
             title: const Text('Change backend address?'),
             content: Text(
-              'Use a trusted server. Future API requests go to the new address.'
+              'Use a trusted server. Future API requests go to the new address. Sign in again after changing the backend.'
               '${next.usesInsecureRemoteHttp ? '\n\nHTTP outside local development sends data without transport encryption.' : ''}'
               '${pending > 0 ? '\n\n$pending unsynchronized scans will stay in the queue.' : ''}'
               '\n\nA later manual sync sends queued scans to the configured server.',
@@ -117,6 +117,10 @@ class _StationSettingsScreenState extends ConsumerState<StationSettingsScreen> {
       if (!mounted) return;
       setState(() {
         _urlError = switch (failure) {
+          ApiEndpointUpdateFailure.application =>
+            'Could not prepare the API address. The current address is still in use.',
+          ApiEndpointUpdateFailure.persistenceUncertain =>
+            'The saved address could not be verified. The current address is still in use. Apply an address again before restarting.',
           ApiEndpointUpdateFailure.persistence =>
             'Could not save the API address. The current address is still in use.',
           ApiEndpointUpdateFailure.busy =>
