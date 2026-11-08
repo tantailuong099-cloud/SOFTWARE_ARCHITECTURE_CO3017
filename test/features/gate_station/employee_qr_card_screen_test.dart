@@ -5,8 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:tmc_gate_app/core/network/dio_client.dart';
+import 'package:tmc_gate_app/features/gate_station/data/gate_station_repository.dart';
+import 'package:tmc_gate_app/features/gate_station/domain/dynamic_qr_source.dart';
+import 'package:tmc_gate_app/features/gate_station/presentation/providers/dynamic_qr_controller.dart';
 import 'package:tmc_gate_app/features/gate_station/presentation/screens/employee_qr_card_screen.dart';
 import 'package:tmc_gate_app/features/gate_station/presentation/widgets/qr_code_widget.dart';
+
+import 'support/controlled_dynamic_qr_source.dart';
 
 const _defaultEmployee = 'EMP-BD-001';
 const _otherEmployee = 'EMP-LA-001';
@@ -23,13 +28,13 @@ void main() {
     tester,
   ) async {
     final backend = await _openCard(tester);
-    expect(find.text('Nguyễn Văn An'), findsOneWidget);
-    expect(find.textContaining('demo M1'), findsOneWidget);
+    expect(find.text('Nguyen Van An'), findsOneWidget);
+    expect(find.textContaining('M1 demo'), findsOneWidget);
     _expectQR(tester, _staticPayload);
-    expect(backend.issuance, isEmpty);
+    expect(backend.source.requests, isEmpty);
 
-    await tester.tap(find.text('Sao chép mã'));
-    await tester.tap(find.text('Quét thử ngay'));
+    await tester.tap(find.text('Copy QR'));
+    await tester.tap(find.text('Test scan'));
     await tester.pump(Duration.zero);
     expect(backend.clipboard, [_staticPayload]);
     expect(backend.scans.single.options.data['qrPayload'], _staticPayload);
@@ -44,22 +49,19 @@ void main() {
     await _enableDynamic(tester);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     _expectUnavailable(tester);
-    expect(
-      backend.issuance.single.options.path,
-      endsWith('/$_defaultEmployee/dynamic-qr'),
-    );
+    expect(backend.source.requests.single.employeeId, _defaultEmployee);
 
     backend.issue(0, tester, payload: _serverPayload);
     await tester.pump(Duration.zero);
     _expectQR(tester, _serverPayload);
-    expect(find.text('Mã QR hết hạn sau: 60s'), findsOneWidget);
+    expect(find.text('QR expires in 60s'), findsOneWidget);
 
-    await tester.tap(find.text('Quét thử ngay'));
+    await tester.tap(find.text('Test scan'));
     await tester.pump(Duration.zero);
     expect(backend.scans.single.options.data['qrPayload'], _serverPayload);
-    expect(find.text('Đã yêu cầu quét mã QR'), findsOneWidget);
+    expect(find.text('QR scan requested'), findsOneWidget);
 
-    await tester.tap(find.text('Sao chép mã'));
+    await tester.tap(find.text('Copy QR'));
     expect(backend.clipboard, [_serverPayload]);
     backend.denyScan();
     await tester.pump(Duration.zero);
@@ -74,22 +76,22 @@ void main() {
     await tester.pump(Duration.zero);
 
     await tester.pump(const Duration(seconds: 29));
-    expect(backend.issuance, hasLength(1));
-    expect(find.text('Mã QR hết hạn sau: 31s'), findsOneWidget);
+    expect(backend.source.requests, hasLength(1));
+    expect(find.text('QR expires in 31s'), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
-    expect(backend.issuance, hasLength(2));
+    expect(backend.source.requests, hasLength(2));
     _expectUnavailable(tester);
 
-    backend.issuance[1].fail();
+    backend.source.fail(1, DynamicQRFailure.unavailable);
     await tester.pump(Duration.zero);
-    expect(find.textContaining('kiểm tra kết nối'), findsOneWidget);
+    expect(find.textContaining('Check your connection'), findsOneWidget);
     _expectUnavailable(tester);
-    await tester.tap(find.text('Thử lại'));
+    await tester.tap(find.text('Retry'));
     await tester.pump(Duration.zero);
     backend.issue(2, tester, payload: _rotatedPayload);
     await tester.pump(Duration.zero);
     _expectQR(tester, _rotatedPayload);
-    expect(find.text('Mã QR hết hạn sau: 60s'), findsOneWidget);
+    expect(find.text('QR expires in 60s'), findsOneWidget);
   });
 
   testWidgets('inactive employee response clears the previous employee QR', (
@@ -102,41 +104,39 @@ void main() {
     _expectQR(tester, _serverPayload);
 
     await _selectEmployee(tester, 'EMP-BD-003');
-    expect(find.text('Lê Hoàng Nam'), findsOneWidget);
-    expect(
-      backend.issuance[1].options.path,
-      endsWith('/EMP-BD-003/dynamic-qr'),
-    );
+    expect(find.text('Le Hoang Nam'), findsOneWidget);
+    expect(backend.source.requests[1].employeeId, 'EMP-BD-003');
     _expectUnavailable(tester);
 
-    backend.issuance[1].fail(status: 400);
+    backend.source.fail(1, DynamicQRFailure.employeeIneligible);
     await tester.pump(Duration.zero);
-    expect(find.textContaining('không được cấp'), findsOneWidget);
+    expect(find.textContaining('not eligible'), findsOneWidget);
     _expectUnavailable(tester);
   });
 
-  testWidgets('late response cannot replace the selected employee QR', (
+  testWidgets('rapid employee changes ignore both previous requests', (
     tester,
   ) async {
     final backend = await _openCard(tester);
     await _enableDynamic(tester);
     await _selectEmployee(tester, _otherEmployee);
     await _selectEmployee(tester, _otherEmployee);
-    expect(backend.issuance, hasLength(2));
+    await _selectEmployee(tester, _defaultEmployee);
+    expect(backend.source.requests.map((request) => request.employeeId), [
+      _defaultEmployee,
+      _otherEmployee,
+      _defaultEmployee,
+    ]);
     _expectUnavailable(tester);
 
-    backend.issue(
-      1,
-      tester,
-      employeeId: _otherEmployee,
-      payload: _otherPayload,
-    );
+    backend.issue(2, tester, payload: _rotatedPayload);
     await tester.pump(Duration.zero);
-    _expectQR(tester, _otherPayload);
+    _expectQR(tester, _rotatedPayload);
 
+    backend.issue(1, tester, payload: _otherPayload);
     backend.issue(0, tester, payload: _serverPayload);
     await tester.pump(Duration.zero);
-    _expectQR(tester, _otherPayload);
+    _expectQR(tester, _rotatedPayload);
   });
 
   testWidgets(
@@ -151,20 +151,20 @@ void main() {
         remaining: const Duration(milliseconds: 2500),
       );
       await tester.pump(Duration.zero);
-      expect(find.text('Mã QR hết hạn sau: 3s'), findsOneWidget);
+      expect(find.text('QR expires in 3s'), findsOneWidget);
 
       // Capture the callbacks from the last rendered frame.
-      final copy = _action(tester, 'Sao chép mã').onPressed!;
-      final scan = _action(tester, 'Quét thử ngay').onPressed!;
+      final copy = _action(tester, 'Copy QR').onPressed!;
+      final scan = _action(tester, 'Test scan').onPressed!;
       await tester.pump(const Duration(milliseconds: 2499));
       _expectQR(tester, _serverPayload);
-      await tester.pump(const Duration(milliseconds: 1));
-      expect(find.text('Mã QR động đã hết hạn.'), findsOneWidget);
-      _expectUnavailable(tester);
-
+      backend.clockOffset = const Duration(milliseconds: 1);
       copy();
       scan();
-      await tester.pump(Duration.zero);
+      backend.clockOffset = Duration.zero;
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(find.text('The dynamic QR has expired.'), findsOneWidget);
+      _expectUnavailable(tester);
       expect(backend.clipboard, isEmpty);
       expect(backend.scans, isEmpty);
     },
@@ -175,12 +175,12 @@ void main() {
   ) async {
     final backend = await _openCard(tester);
     await _enableDynamic(tester);
-    await tester.tap(find.text('Mã QR Tĩnh (M1)'));
+    await tester.tap(find.text('Static QR (M1)'));
     await tester.pump(Duration.zero);
     backend.issue(0, tester, payload: _serverPayload);
     await tester.pump(const Duration(seconds: 31));
     _expectQR(tester, _staticPayload);
-    expect(backend.issuance, hasLength(1));
+    expect(backend.source.requests, hasLength(1));
   });
 
   testWidgets('disposal cancels timers and safely ignores pending responses', (
@@ -189,37 +189,32 @@ void main() {
     final backend = await _openCard(tester);
     await _enableDynamic(tester);
     await _selectEmployee(tester, _otherEmployee);
-    backend.issue(
-      1,
-      tester,
-      employeeId: _otherEmployee,
-      payload: _otherPayload,
-    );
+    backend.issue(1, tester, payload: _otherPayload);
     await tester.pump(Duration.zero);
     _expectQR(tester, _otherPayload);
 
     await tester.pumpWidget(const SizedBox.shrink());
     backend.issue(0, tester, payload: _serverPayload);
     await tester.pump(const Duration(seconds: 61));
-    expect(backend.issuance, hasLength(2));
+    expect(backend.source.requests, hasLength(2));
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('QR widget handles empty and unencodable input', (tester) async {
     for (final input in [' ', List.filled(4000, 'x').join()]) {
       await tester.pumpWidget(MaterialApp(home: QRCodeWidget(data: input)));
-      expect(find.text('Không thể hiển thị mã QR'), findsOneWidget);
+      expect(find.text('Unable to display QR'), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
   });
 }
 
-Future<_MockBackend> _openCard(WidgetTester tester) async {
+Future<_CardDependencies> _openCard(WidgetTester tester) async {
   tester.view.physicalSize = const Size(800, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
-  final backend = _MockBackend();
+  final backend = _CardDependencies();
   addTearDown(backend.dio.close);
   final messenger = tester.binding.defaultBinaryMessenger;
   messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
@@ -233,17 +228,21 @@ Future<_MockBackend> _openCard(WidgetTester tester) async {
   });
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [dioProvider.overrideWithValue(backend.dio)],
-      child: MaterialApp(
-        home: EmployeeQRCardScreen(now: tester.binding.clock.now),
-      ),
+      overrides: [
+        dioProvider.overrideWithValue(backend.dio),
+        dynamicQRSourceProvider.overrideWithValue(backend.source),
+        dynamicQRClockProvider.overrideWithValue(
+          () => tester.binding.clock.now().add(backend.clockOffset),
+        ),
+      ],
+      child: const MaterialApp(home: EmployeeQRCardScreen()),
     ),
   );
   return backend;
 }
 
 Future<void> _enableDynamic(WidgetTester tester) async {
-  await tester.tap(find.text('Mã QR Động (M2)'));
+  await tester.tap(find.text('Dynamic QR (M2)'));
   await tester.pump(Duration.zero);
 }
 
@@ -271,26 +270,24 @@ ButtonStyleButton _action(WidgetTester tester, String label) {
 
 void _expectUnavailable(WidgetTester tester) {
   expect(find.byType(QRCodeWidget), findsNothing);
-  expect(_action(tester, 'Sao chép mã').onPressed, isNull);
-  expect(_action(tester, 'Quét thử ngay').onPressed, isNull);
+  expect(_action(tester, 'Copy QR').onPressed, isNull);
+  expect(_action(tester, 'Test scan').onPressed, isNull);
 }
 
-class _MockBackend {
+class _CardDependencies {
   final dio = Dio();
-  final issuance = <_PendingRequest>[];
+  final source = ControlledDynamicQRSource();
+  Duration clockOffset = Duration.zero;
   final scans = <_PendingRequest>[];
   final clipboard = <String>[];
 
-  _MockBackend() {
+  _CardDependencies() {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
           final request = _PendingRequest(options, handler);
           if (options.method == 'POST' && options.path == '/access/scan') {
             scans.add(request);
-          } else if (options.method == 'GET' &&
-              options.path.endsWith('/dynamic-qr')) {
-            issuance.add(request);
           } else {
             throw StateError(
               'Unexpected request: ${options.method} ${options.path}',
@@ -304,22 +301,14 @@ class _MockBackend {
   void issue(
     int index,
     WidgetTester tester, {
-    String employeeId = _defaultEmployee,
     required String payload,
     Duration remaining = const Duration(seconds: 60),
   }) {
-    final expiresAt = tester.binding.clock.now().toUtc().add(remaining);
-    issuance[index].reply({
-      'employeeId': employeeId,
-      'employeeName': 'Employee Name',
-      'factoryId': 'FACTORY',
-      'qrPayload': payload,
-      'generatedAt': expiresAt
-          .subtract(const Duration(seconds: 60))
-          .toIso8601String(),
-      'expiresAt': expiresAt.toIso8601String(),
-      'validDurationSeconds': 60,
-    });
+    source.issue(
+      index,
+      payload: payload,
+      expiresAt: tester.binding.clock.now().toUtc().add(remaining),
+    );
   }
 
   void denyScan() {
@@ -340,20 +329,6 @@ class _PendingRequest {
   void reply(Map<String, dynamic> data) {
     handler.resolve(
       Response(requestOptions: options, data: data, statusCode: 200),
-    );
-  }
-
-  void fail({int? status}) {
-    handler.reject(
-      DioException(
-        requestOptions: options,
-        type: status == null
-            ? DioExceptionType.connectionError
-            : DioExceptionType.badResponse,
-        response: status == null
-            ? null
-            : Response(requestOptions: options, statusCode: status),
-      ),
     );
   }
 }

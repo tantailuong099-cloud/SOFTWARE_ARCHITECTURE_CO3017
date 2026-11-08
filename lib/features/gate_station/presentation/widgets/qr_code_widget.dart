@@ -14,7 +14,7 @@ class QRCodeWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const unavailable = Center(child: Text('Không thể hiển thị mã QR'));
+    const unavailable = Center(child: Text('Unable to display QR'));
     final canEncode =
         data.trim().isNotEmpty && utf8.encode(data).length <= _maxPayloadBytes;
     return Container(

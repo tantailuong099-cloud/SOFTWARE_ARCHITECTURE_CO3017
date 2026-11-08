@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tmc_gate_app/core/network/dio_client.dart';
+import '../domain/dynamic_qr_source.dart';
 import 'models/access_scan_models.dart';
 import 'models/dynamic_qr_model.dart';
 
@@ -9,7 +10,11 @@ final gateStationRepositoryProvider = Provider<GateStationRepository>((ref) {
   return GateStationRepository(dio);
 });
 
-class GateStationRepository {
+final dynamicQRSourceProvider = Provider<DynamicQRSource>((ref) {
+  return ref.watch(gateStationRepositoryProvider);
+});
+
+class GateStationRepository implements DynamicQRSource {
   final Dio _dio;
 
   GateStationRepository(this._dio);
@@ -94,19 +99,31 @@ class GateStationRepository {
     }
   }
 
-  // --- M2 Enhancement: Fetch Dynamic Rotating QR (ADR-007) ---
+  @override
   Future<DynamicQR> fetchDynamicQR(String employeeId) async {
-    final id = Uri.encodeComponent(employeeId);
-    final response = await _dio.get('/user-qr/employees/$id/dynamic-qr');
-    final data = response.data;
-    if (data is! Map<String, dynamic>) {
-      throw const FormatException('Expected a dynamic QR response object');
-    }
+    try {
+      final id = Uri.encodeComponent(employeeId);
+      final response = await _dio.get('/user-qr/employees/$id/dynamic-qr');
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        throw DynamicQRFailure.invalidResponse;
+      }
 
-    final credential = DynamicQR.fromJson(data);
-    if (credential.employeeId != employeeId) {
-      throw const FormatException('Dynamic QR belongs to a different employee');
+      final credential = parseDynamicQR(data);
+      if (credential.employeeId != employeeId) {
+        throw DynamicQRFailure.invalidResponse;
+      }
+      return credential;
+    } on DioException catch (error) {
+      throw switch (error.response?.statusCode) {
+        400 || 403 => DynamicQRFailure.employeeIneligible,
+        404 => DynamicQRFailure.employeeNotFound,
+        _ when error.error is FormatException =>
+          DynamicQRFailure.invalidResponse,
+        _ => DynamicQRFailure.unavailable,
+      };
+    } on FormatException {
+      throw DynamicQRFailure.invalidResponse;
     }
-    return credential;
   }
 }

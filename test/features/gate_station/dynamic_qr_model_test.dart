@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tmc_gate_app/features/gate_station/data/gate_station_repository.dart';
 import 'package:tmc_gate_app/features/gate_station/data/models/dynamic_qr_model.dart';
+import 'package:tmc_gate_app/features/gate_station/domain/dynamic_qr_source.dart';
 
 const _response = <String, dynamic>{
   'employeeId': 'EMP-BD-001',
@@ -46,7 +47,7 @@ void main() {
       {'validDurationSeconds': '60'},
     ]) {
       expect(
-        () => DynamicQR.fromJson({..._response, ...changes}),
+        () => parseDynamicQR({..._response, ...changes}),
         throwsFormatException,
         reason: changes.toString(),
       );
@@ -58,25 +59,58 @@ void main() {
     () async {
       await expectLater(
         _repositoryRespondingWith([]).fetchDynamicQR('EMP-BD-001'),
-        throwsFormatException,
+        throwsA(DynamicQRFailure.invalidResponse),
       );
       await expectLater(
         _repositoryRespondingWith(_response).fetchDynamicQR('EMP-LA-001'),
-        throwsFormatException,
+        throwsA(DynamicQRFailure.invalidResponse),
       );
+    },
+  );
+
+  test(
+    'repository maps transport failures to the credential source contract',
+    () async {
+      for (final (status, error, failure) in [
+        (400, null, DynamicQRFailure.employeeIneligible),
+        (403, null, DynamicQRFailure.employeeIneligible),
+        (404, null, DynamicQRFailure.employeeNotFound),
+        (503, null, DynamicQRFailure.unavailable),
+        (null, null, DynamicQRFailure.unavailable),
+        (null, const FormatException(), DynamicQRFailure.invalidResponse),
+      ]) {
+        final repository = _repositoryWithRequestHandler((options, handler) {
+          handler.reject(
+            DioException(
+              requestOptions: options,
+              error: error,
+              response: status == null
+                  ? null
+                  : Response(requestOptions: options, statusCode: status),
+            ),
+          );
+        });
+
+        await expectLater(
+          repository.fetchDynamicQR('EMP-BD-001'),
+          throwsA(failure),
+        );
+      }
     },
   );
 }
 
 GateStationRepository _repositoryRespondingWith(Object data) {
+  return _repositoryWithRequestHandler((options, handler) {
+    handler.resolve(Response(requestOptions: options, data: data));
+  });
+}
+
+GateStationRepository _repositoryWithRequestHandler(
+  void Function(RequestOptions, RequestInterceptorHandler) onRequest,
+) {
   final dio = Dio();
   addTearDown(dio.close);
-  dio.interceptors.add(
-    InterceptorsWrapper(
-      onRequest: (options, handler) {
-        handler.resolve(Response(requestOptions: options, data: data));
-      },
-    ),
-  );
+  dio.interceptors.add(InterceptorsWrapper(onRequest: onRequest));
   return GateStationRepository(dio);
 }
