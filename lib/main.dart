@@ -4,9 +4,5 @@ import 'package:tmc_gate_app/app/app.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(
-    const ProviderScope(
-      child: TMCGateApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: TMCGateApp()));
 }

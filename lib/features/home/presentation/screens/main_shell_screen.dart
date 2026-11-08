@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../gate_station/presentation/screens/gate_station_kiosk_screen.dart';
-import '../../gate_station/presentation/screens/recent_gate_events_screen.dart';
-import '../../gate_station/presentation/screens/employee_qr_card_screen.dart';
-import '../../gate_station/presentation/screens/station_settings_screen.dart';
+import '../../../gate_station/presentation/screens/gate_station_kiosk_screen.dart';
+import '../../../gate_station/presentation/screens/recent_gate_events_screen.dart';
+import '../../../gate_station/presentation/screens/employee_qr_card_screen.dart';
+import '../../../gate_station/presentation/screens/station_settings_screen.dart';
 
 class MainShellScreen extends StatefulWidget {
   const MainShellScreen({super.key});
@@ -24,10 +24,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
+      body: IndexedStack(index: _currentIndex, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
