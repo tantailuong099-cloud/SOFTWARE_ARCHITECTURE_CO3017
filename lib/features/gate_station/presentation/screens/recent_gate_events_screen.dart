@@ -101,7 +101,7 @@ class _RecentGateEventsScreenState extends ConsumerState<RecentGateEventsScreen>
         return Card(
           margin: const EdgeInsets.only(bottom: 10),
           elevation: 1,
-          shape: RoundedRectangleRadius(
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(
               color: isApproved ? Colors.green.shade200 : Colors.red.shade200,
