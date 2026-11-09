@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:tmc_gate_app/core/config/api_config.dart';
 import 'package:tmc_gate_app/core/network/dio_client.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
@@ -27,12 +30,19 @@ class AuthRepository {
       final response = await _dio.post(
         '/auth/login',
         data: {'email': email.trim(), 'password': password},
+        options: Options(followRedirects: false),
       );
 
       if (response.data is! Map) {
         throw const FormatException('Phản hồi đăng nhập không hợp lệ');
       }
 
+      final issuer = response.requestOptions.baseUrl;
+      if (issuer != _dio.options.baseUrl) {
+        throw const FormatException(
+          'The backend address changed. Sign in again.',
+        );
+      }
       final data = Map<String, dynamic>.from(response.data as Map);
       final accessToken = data['accessToken']?.toString();
       final refreshToken = data['refreshToken']?.toString();
@@ -53,7 +63,10 @@ class AuthRepository {
       final nameVal = user['fullName'] as String? ?? '';
       final empCode = user['employeeCode'] as String? ?? '';
 
-      await _secureStorage.write(key: _keyAccessToken, value: accessToken);
+      await _secureStorage.write(
+        key: _keyAccessToken,
+        value: jsonEncode({'token': accessToken, 'endpoint': issuer}),
+      );
       await _secureStorage.write(key: _keyRefreshToken, value: refreshToken);
       await _secureStorage.write(key: _keyUserRole, value: role);
       await _secureStorage.write(key: _keyUserEmail, value: emailVal);
@@ -79,14 +92,18 @@ class AuthRepository {
   }
 
   Future<Map<String, String?>> getStoredUserData() async {
-    final accessToken = await _secureStorage.read(key: _keyAccessToken);
+    final session = await _readAccessSession();
+    if (session == null || session.endpoint != _dio.options.baseUrl) {
+      return const {};
+    }
     final role = await _secureStorage.read(key: _keyUserRole);
     final email = await _secureStorage.read(key: _keyUserEmail);
     final name = await _secureStorage.read(key: _keyUserName);
     final employeeCode = await _secureStorage.read(key: _keyEmployeeCode);
 
+    if (session.endpoint != _dio.options.baseUrl) return const {};
     return {
-      'accessToken': accessToken,
+      'accessToken': session.token,
       'role': role,
       'email': email,
       'name': name,
@@ -94,13 +111,36 @@ class AuthRepository {
     };
   }
 
+  Future<({String token, String endpoint})?> _readAccessSession() async {
+    final stored = await _secureStorage.read(key: _keyAccessToken);
+    if (stored == null || stored.isEmpty) return null;
+    if (!stored.startsWith('{')) {
+      return (token: stored, endpoint: ApiConfig.defaultBaseUrl);
+    }
+    try {
+      final value = jsonDecode(stored);
+      if (value case {
+        'token': final String token,
+        'endpoint': final String endpoint,
+      } when token.isNotEmpty && endpoint.isNotEmpty) {
+        return (token: token, endpoint: endpoint);
+      }
+    } on FormatException {
+      return null;
+    }
+    return null;
+  }
+
   Future<void> logout() async {
     try {
-      final token = await _secureStorage.read(key: _keyAccessToken);
-      if (token != null) {
+      final session = await _readAccessSession();
+      if (session != null && _dio.options.baseUrl == session.endpoint) {
         await _dio.post(
           '/auth/logout',
-          options: Options(headers: {'Authorization': 'Bearer $token'}),
+          options: Options(
+            headers: {'Authorization': 'Bearer ${session.token}'},
+            followRedirects: false,
+          ),
         );
       }
     } catch (_) {
