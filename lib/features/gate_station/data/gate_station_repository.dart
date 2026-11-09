@@ -5,6 +5,10 @@ import '../domain/dynamic_qr_source.dart';
 import 'models/access_scan_models.dart';
 import 'models/dynamic_qr_model.dart';
 
+import '../domain/recent_gate_event.dart';
+import '../domain/recent_gate_events_source.dart';
+import 'models/recent_gate_event_parser.dart';
+
 final gateStationRepositoryProvider = Provider<GateStationRepository>((ref) {
   final dio = ref.watch(dioProvider);
   return GateStationRepository(dio);
@@ -52,15 +56,34 @@ class GateStationRepository implements DynamicQRSource {
     }
   }
 
-  Future<List<Map<String, dynamic>>> fetchRecentEvents(String stationId) async {
+  Future<List<RecentGateEvent>> fetchRecentEvents(String stationId) async {
     try {
-      final response = await _dio.get('/access/recent-events/$stationId');
-      if (response.data is List) {
-        return List<Map<String, dynamic>>.from(response.data as List);
+      final id = Uri.encodeComponent(stationId);
+      final response = await _dio.get('/access/recent-events/$id');
+      final data = response.data;
+      if (data is! List) throw RecentEventsFailure.invalidResponse;
+
+      final events = <RecentGateEvent>[];
+      for (final row in data) {
+        if (row is! Map<String, dynamic>) {
+          throw RecentEventsFailure.invalidResponse;
+        }
+        final event = parseRecentGateEvent(row);
+        if (event.stationId != stationId) {
+          throw RecentEventsFailure.invalidResponse;
+        }
+        events.add(event);
       }
-      return [];
-    } catch (_) {
-      return [];
+      return List.unmodifiable(events);
+    } on DioException catch (error) {
+      if (error.response?.statusCode case 401 || 403) {
+        throw RecentEventsFailure.unauthorized;
+      }
+      throw error.error is FormatException
+          ? RecentEventsFailure.invalidResponse
+          : RecentEventsFailure.unavailable;
+    } on FormatException {
+      throw RecentEventsFailure.invalidResponse;
     }
   }
 
