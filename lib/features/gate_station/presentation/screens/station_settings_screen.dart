@@ -50,7 +50,7 @@ class _StationSettingsScreenState extends ConsumerState<StationSettingsScreen> {
         children: [
           // Station Config Card
           Card(
-            shape: RoundedRectangleRadius(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -76,7 +76,7 @@ class _StationSettingsScreenState extends ConsumerState<StationSettingsScreen> {
 
           // Backend API Endpoint Card
           Card(
-            shape: RoundedRectangleRadius(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -121,7 +121,7 @@ class _StationSettingsScreenState extends ConsumerState<StationSettingsScreen> {
 
           // Architecture Compliance Info
           Card(
-            shape: RoundedRectangleRadius(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             color: const Color(0xFFE8EAF6),
             child: const Padding(
               padding: const EdgeInsets.all(16),
