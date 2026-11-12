@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:tmc_gate_app/core/network/dio_client.dart';
+import 'package:tmc_gate_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:tmc_gate_app/features/gate_station/data/gate_station_repository.dart';
 import 'package:tmc_gate_app/features/gate_station/domain/dynamic_qr_source.dart';
 import 'package:tmc_gate_app/features/gate_station/presentation/providers/dynamic_qr_controller.dart';
@@ -14,12 +15,9 @@ import 'package:tmc_gate_app/features/gate_station/presentation/widgets/qr_code_
 import 'support/controlled_dynamic_qr_source.dart';
 
 const _defaultEmployee = 'EMP-BD-001';
-const _otherEmployee = 'EMP-LA-001';
 const _staticPayload = 'TMC:QR:EMP-BD-001:V1:SEC_VALID_KEY_001';
 const _serverPayload =
     'TMC:DYN:EMP-BD-001:1893456000000:ca128d20:4b73ac0e501dbcf9';
-const _otherPayload =
-    'TMC:DYN:EMP-LA-001:1893456000000:af820b23:bd504c91eab23003';
 const _rotatedPayload =
     'TMC:DYN:EMP-BD-001:1893456030000:83adf210:1c35ad7b0610df30';
 
@@ -28,7 +26,7 @@ void main() {
     tester,
   ) async {
     final backend = await _openCard(tester);
-    expect(find.text('Nguyen Van An'), findsOneWidget);
+    expect(find.text('Nguyen Van An'), findsWidgets);
     expect(find.textContaining('M1 demo'), findsOneWidget);
     _expectQR(tester, _staticPayload);
     expect(backend.source.requests, isEmpty);
@@ -40,6 +38,25 @@ void main() {
     expect(backend.scans.single.options.data['qrPayload'], _staticPayload);
     backend.denyScan();
     await tester.pump(Duration.zero);
+  });
+
+  testWidgets('header displays necessary employee info, logout button, and no UC code', (
+    tester,
+  ) async {
+    await _openCard(
+      tester,
+      authState: AuthState(
+        isAuthenticated: true,
+        employeeCode: 'EMP-LA-001',
+        name: 'Pham Minh Duc',
+        role: 'EMPLOYEE',
+      ),
+    );
+    expect(find.textContaining('UC-01'), findsNothing);
+    expect(find.text('Thẻ Nhân Viên & Mã QR'), findsOneWidget);
+    expect(find.textContaining('EMP-LA-001'), findsWidgets);
+    expect(find.byIcon(Icons.logout_rounded), findsOneWidget);
+    expect(find.byType(DropdownButton<String>), findsNothing);
   });
 
   testWidgets('M2 displays, copies, and scans the exact server payload', (
@@ -94,49 +111,30 @@ void main() {
     expect(find.text('QR expires in 60s'), findsOneWidget);
   });
 
-  testWidgets('inactive employee response clears the previous employee QR', (
+  testWidgets('renders specific employee card from authenticated session without dropdown', (
     tester,
   ) async {
-    final backend = await _openCard(tester);
-    await _enableDynamic(tester);
-    backend.issue(0, tester, payload: _serverPayload);
-    await tester.pump(Duration.zero);
-    _expectQR(tester, _serverPayload);
+    final backend = await _openCard(
+      tester,
+      authState: AuthState(
+        isAuthenticated: true,
+        employeeCode: 'EMP-BD-003',
+        name: 'Le Hoang Nam',
+        role: 'EMPLOYEE',
+      ),
+    );
+    expect(find.text('Le Hoang Nam'), findsWidgets);
+    expect(find.byType(DropdownButton<String>), findsNothing);
+    expect(find.byIcon(Icons.logout_rounded), findsOneWidget);
 
-    await _selectEmployee(tester, 'EMP-BD-003');
-    expect(find.text('Le Hoang Nam'), findsOneWidget);
-    expect(backend.source.requests[1].employeeId, 'EMP-BD-003');
+    await _enableDynamic(tester);
+    expect(backend.source.requests.single.employeeId, 'EMP-BD-003');
     _expectUnavailable(tester);
 
-    backend.source.fail(1, DynamicQRFailure.employeeIneligible);
+    backend.source.fail(0, DynamicQRFailure.employeeIneligible);
     await tester.pump(Duration.zero);
     expect(find.textContaining('not eligible'), findsOneWidget);
     _expectUnavailable(tester);
-  });
-
-  testWidgets('rapid employee changes ignore both previous requests', (
-    tester,
-  ) async {
-    final backend = await _openCard(tester);
-    await _enableDynamic(tester);
-    await _selectEmployee(tester, _otherEmployee);
-    await _selectEmployee(tester, _otherEmployee);
-    await _selectEmployee(tester, _defaultEmployee);
-    expect(backend.source.requests.map((request) => request.employeeId), [
-      _defaultEmployee,
-      _otherEmployee,
-      _defaultEmployee,
-    ]);
-    _expectUnavailable(tester);
-
-    backend.issue(2, tester, payload: _rotatedPayload);
-    await tester.pump(Duration.zero);
-    _expectQR(tester, _rotatedPayload);
-
-    backend.issue(1, tester, payload: _otherPayload);
-    backend.issue(0, tester, payload: _serverPayload);
-    await tester.pump(Duration.zero);
-    _expectQR(tester, _rotatedPayload);
   });
 
   testWidgets(
@@ -153,7 +151,6 @@ void main() {
       await tester.pump(Duration.zero);
       expect(find.text('QR expires in 3s'), findsOneWidget);
 
-      // Capture the callbacks from the last rendered frame.
       final copy = _action(tester, 'Copy QR').onPressed!;
       final scan = _action(tester, 'Test scan').onPressed!;
       await tester.pump(const Duration(milliseconds: 2499));
@@ -188,15 +185,14 @@ void main() {
   ) async {
     final backend = await _openCard(tester);
     await _enableDynamic(tester);
-    await _selectEmployee(tester, _otherEmployee);
-    backend.issue(1, tester, payload: _otherPayload);
+    backend.issue(0, tester, payload: _serverPayload);
     await tester.pump(Duration.zero);
-    _expectQR(tester, _otherPayload);
+    _expectQR(tester, _serverPayload);
 
     await tester.pumpWidget(const SizedBox.shrink());
     backend.issue(0, tester, payload: _serverPayload);
     await tester.pump(const Duration(seconds: 61));
-    expect(backend.source.requests, hasLength(2));
+    expect(backend.source.requests, hasLength(1));
     expect(tester.takeException(), isNull);
   });
 
@@ -209,7 +205,18 @@ void main() {
   });
 }
 
-Future<_CardDependencies> _openCard(WidgetTester tester) async {
+class _FakeAuthNotifier extends AuthNotifier {
+  final AuthState _initialState;
+  _FakeAuthNotifier(this._initialState);
+
+  @override
+  AuthState build() => _initialState;
+}
+
+Future<_CardDependencies> _openCard(
+  WidgetTester tester, {
+  AuthState? authState,
+}) async {
   tester.view.physicalSize = const Size(800, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
@@ -234,6 +241,8 @@ Future<_CardDependencies> _openCard(WidgetTester tester) async {
         dynamicQRClockProvider.overrideWithValue(
           () => tester.binding.clock.now().add(backend.clockOffset),
         ),
+        if (authState != null)
+          authNotifierProvider.overrideWith(() => _FakeAuthNotifier(authState)),
       ],
       child: const MaterialApp(home: EmployeeQRCardScreen()),
     ),
@@ -243,14 +252,6 @@ Future<_CardDependencies> _openCard(WidgetTester tester) async {
 
 Future<void> _enableDynamic(WidgetTester tester) async {
   await tester.tap(find.text('Dynamic QR (M2)'));
-  await tester.pump(Duration.zero);
-}
-
-Future<void> _selectEmployee(WidgetTester tester, String id) async {
-  final dropdown = tester.widget<DropdownButton<String>>(
-    find.byType(DropdownButton<String>),
-  );
-  dropdown.onChanged!(id);
   await tester.pump(Duration.zero);
 }
 

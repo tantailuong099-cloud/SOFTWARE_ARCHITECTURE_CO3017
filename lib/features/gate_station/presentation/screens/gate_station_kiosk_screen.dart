@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tmc_gate_app/core/widgets/access_denied_widget.dart';
+import 'package:tmc_gate_app/features/auth/domain/user_role.dart';
+import 'package:tmc_gate_app/features/auth/presentation/providers/auth_provider.dart';
+import '../../data/models/access_scan_models.dart';
 import '../providers/gate_station_provider.dart';
+import '../providers/kiosk_management_provider.dart';
+import '../providers/recent_gate_events_controller.dart';
 import '../widgets/qr_viewfinder.dart';
 import '../widgets/turnstile_status_card.dart';
 
 class GateStationKioskScreen extends ConsumerStatefulWidget {
-  const GateStationKioskScreen({super.key});
+  final bool showAppBar;
+  const GateStationKioskScreen({super.key, this.showAppBar = false});
 
   @override
   ConsumerState<GateStationKioskScreen> createState() =>
@@ -16,33 +24,13 @@ class _GateStationKioskScreenState
     extends ConsumerState<GateStationKioskScreen> {
   final TextEditingController _qrInputController = TextEditingController();
 
-  final List<Map<String, String>> _testQRCredentials = [
-    {
-      'label': '🟢 Hợp lệ BD (An)',
-      'payload': 'TMC:QR:EMP-BD-001:V1:SEC_VALID_KEY_001',
-      'desc': 'Nhân viên BD hợp lệ, cổng sẽ MỞ (UNLOCKED)'
-    },
-    {
-      'label': '🟡 QR Hết hạn',
-      'payload': 'TMC:QR:EMP-BD-003:V1:SEC_EXPIRED_KEY_003',
-      'desc': 'QR quá 24h, từ chối CREDENTIAL_EXPIRED'
-    },
-    {
-      'label': '🔴 QR Tạm ngưng',
-      'payload': 'TMC:QR:EMP-BD-002:V1:SEC_SUSPENDED_KEY_002',
-      'desc': 'HR tạm ngưng, từ chối CREDENTIAL_SUSPENDED'
-    },
-    {
-      'label': '🟣 Sai phân xưởng (LA)',
-      'payload': 'TMC:QR:EMP-LA-001:V1:SEC_VALID_KEY_LA01',
-      'desc': 'Nhân viên Long An quét tại cổng Bình Dương'
-    },
-    {
-      'label': '⚫ QR lạ / Ngoài hệ thống',
-      'payload': 'HTTPS://GOOGLE.COM/UNRECOGNIZED',
-      'desc': 'Mã không thuộc định dạng TMC:QR:*'
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(kioskManagementProvider.notifier).loadStations();
+    });
+  }
 
   @override
   void dispose() {
@@ -50,78 +38,156 @@ class _GateStationKioskScreenState
     super.dispose();
   }
 
-  void _onTriggerScan(String payload) {
+  void _onTriggerScan(String payload) async {
     if (payload.trim().isEmpty) return;
     _qrInputController.text = payload;
-    ref.read(gateStationNotifierProvider.notifier).submitScan(payload);
+    await ref.read(gateStationNotifierProvider.notifier).submitScan(payload);
+    ref.invalidate(recentGateEventsProvider);
   }
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authNotifierProvider);
+    final userRole = AppUserRole.fromString(authState.role);
+    if (authState.isAuthenticated && !userRole.canAccessKiosk) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('TMC Gate Station Kiosk')),
+        body: AccessDeniedWidget(
+          title: 'Từ chối quyền truy cập Trạm quét Kiosk',
+          message:
+              'Trạm quét Kiosk và điều khiển barie chỉ dành cho Quản trị viên (ADMIN) và Nhân viên Bảo vệ (SECURITY_GUARD).',
+          currentRole: userRole,
+        ),
+      );
+    }
+
     final state = ref.watch(gateStationNotifierProvider);
+    final kioskList = ref.watch(kioskManagementProvider.select((s) => s.stations));
     final isScanning = state.displayStatus == GateDisplayStatus.idle ||
         state.displayStatus == GateDisplayStatus.processing;
 
+    final dynamicStations = kioskList.isNotEmpty
+        ? kioskList
+        : [
+            GateStation(
+              stationId: 'BD-GATE-01',
+              factoryId: 'BINH_DUONG',
+              gateIdentifier: 'Binh Duong - Main Entrance',
+              direction: 'ENTRY',
+              status: 'ACTIVE',
+            ),
+            GateStation(
+              stationId: 'BD-GATE-02',
+              factoryId: 'BINH_DUONG',
+              gateIdentifier: 'Binh Duong - Main Exit',
+              direction: 'EXIT',
+              status: 'ACTIVE',
+            ),
+            GateStation(
+              stationId: 'BD-GATE-03',
+              factoryId: 'BINH_DUONG',
+              gateIdentifier: 'Binh Duong - Auxiliary Entry',
+              direction: 'ENTRY',
+              status: 'ACTIVE',
+            ),
+            GateStation(
+              stationId: 'BD-GATE-04',
+              factoryId: 'BINH_DUONG',
+              gateIdentifier: 'Binh Duong - Auxiliary Exit',
+              direction: 'EXIT',
+              status: 'ACTIVE',
+            ),
+            GateStation(
+              stationId: 'LA-GATE-01',
+              factoryId: 'LONG_AN',
+              gateIdentifier: 'Long An - Gate A Entrance',
+              direction: 'ENTRY',
+              status: 'ACTIVE',
+            ),
+            GateStation(
+              stationId: 'LA-GATE-02',
+              factoryId: 'LONG_AN',
+              gateIdentifier: 'Long An - Gate A Exit',
+              direction: 'EXIT',
+              status: 'ACTIVE',
+            ),
+            GateStation(
+              stationId: 'LA-GATE-03',
+              factoryId: 'LONG_AN',
+              gateIdentifier: 'Long An - Auxiliary Entry',
+              direction: 'ENTRY',
+              status: 'ACTIVE',
+            ),
+            GateStation(
+              stationId: 'LA-GATE-04',
+              factoryId: 'LONG_AN',
+              gateIdentifier: 'Long An - Auxiliary Exit',
+              direction: 'EXIT',
+              status: 'ACTIVE',
+            ),
+          ];
+
+    final isStationActive = state.activeStation.isActive;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'TMC Gate Station Kiosk',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            Text(
-              '${state.activeStation.factoryId} • ${state.activeStation.stationId} (${state.activeStation.direction})',
-              style: const TextStyle(fontSize: 12, color: Colors.white70),
-            ),
-          ],
-        ),
-        actions: [
-          // M2 Feature: Offline mode simulation toggle (Issue 1)
-          IconButton(
-            tooltip: state.isSimulatingOffline
-                ? 'Đang mất mạng (Bấm để bật lại Online)'
-                : 'Mô phỏng Mất mạng (Offline Mode)',
-            icon: Icon(
-              state.isSimulatingOffline
-                  ? Icons.wifi_off_rounded
-                  : Icons.wifi_rounded,
-              color: state.isSimulatingOffline ? Colors.amberAccent : Colors.white,
-            ),
-            onPressed: () {
-              ref
-                  .read(gateStationNotifierProvider.notifier)
-                  .toggleOfflineSimulation();
-            },
-          ),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: state.activeStation.status == 'ACTIVE'
-                  ? Colors.green.shade600
-                  : Colors.red.shade600,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.circle, size: 8, color: Colors.white),
-                const SizedBox(width: 4),
-                Text(
-                  state.activeStation.status,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+      appBar: widget.showAppBar
+          ? AppBar(
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'TMC Gate Station Kiosk',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  Text(
+                    '${state.activeStation.factoryId} • ${state.activeStation.stationId} (${state.activeStation.direction})',
+                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
+                ],
+              ),
+              actions: [
+                IconButton(
+                  tooltip: state.isSimulatingOffline
+                      ? 'Đang mất mạng (Bấm để bật lại Online)'
+                      : 'Mô phỏng Mất mạng (Offline Mode)',
+                  icon: Icon(
+                    state.isSimulatingOffline
+                        ? Icons.wifi_off_rounded
+                        : Icons.wifi_rounded,
+                    color: state.isSimulatingOffline ? Colors.amberAccent : Colors.white,
+                  ),
+                  onPressed: () {
+                    ref
+                        .read(gateStationNotifierProvider.notifier)
+                        .toggleOfflineSimulation();
+                  },
+                ),
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isStationActive ? Colors.green.shade600 : Colors.red.shade600,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.circle, size: 8, color: Colors.white),
+                      const SizedBox(width: 4),
+                      Text(
+                        state.activeStation.status,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
+            )
+          : null,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -129,60 +195,235 @@ class _GateStationKioskScreenState
           children: [
             // Station Overview Banner
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: Colors.grey.shade200),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Row(
                 children: [
-                  Icon(
-                    state.activeStation.direction == 'ENTRY'
-                        ? Icons.login_rounded
-                        : Icons.logout_rounded,
-                    color: Theme.of(context).primaryColor,
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: state.activeStation.direction == 'ENTRY'
+                          ? Colors.blue.shade50
+                          : Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      state.activeStation.direction == 'ENTRY'
+                          ? Icons.login_rounded
+                          : Icons.logout_rounded,
+                      color: state.activeStation.direction == 'ENTRY'
+                          ? Colors.blue.shade700
+                          : Colors.amber.shade800,
+                      size: 20,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      '${state.activeStation.gateIdentifier} • [SLA <= 2s]',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${state.activeStation.factoryId} • ${state.activeStation.stationId}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blueGrey.shade600,
+                          ),
+                        ),
+                        Text(
+                          state.activeStation.gateIdentifier,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  IconButton(
+                    tooltip: state.isSimulatingOffline
+                        ? 'Đang mô phỏng ngoại tuyến (Bấm để kết nối lại)'
+                        : 'Mạng trực tuyến (Bấm để mô phỏng mất mạng)',
+                    icon: Icon(
+                      state.isSimulatingOffline
+                          ? Icons.wifi_off_rounded
+                          : Icons.wifi_rounded,
+                      color: state.isSimulatingOffline ? Colors.orange : Colors.green.shade600,
+                      size: 20,
+                    ),
+                    onPressed: () {
+                      ref
+                          .read(gateStationNotifierProvider.notifier)
+                          .toggleOfflineSimulation();
+                    },
+                  ),
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: isStationActive ? Colors.green.shade600 : Colors.red.shade600,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.circle, size: 6, color: Colors.white),
+                        const SizedBox(width: 4),
+                        Text(
+                          state.activeStation.status,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 4),
                   PopupMenuButton<String>(
                     tooltip: 'Đổi trạm kiểm soát',
                     icon: const Icon(Icons.swap_horiz_rounded),
+                    constraints: const BoxConstraints(minWidth: 280, maxWidth: 360),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 8,
                     onSelected: (stationId) {
-                      ref
-                          .read(gateStationNotifierProvider.notifier)
-                          .switchStation(stationId);
+                      final found = dynamicStations
+                          .where((s) => s.stationId == stationId)
+                          .firstOrNull;
+                      if (found != null) {
+                        ref
+                            .read(gateStationNotifierProvider.notifier)
+                            .setActiveStation(found);
+                      } else {
+                        ref
+                            .read(gateStationNotifierProvider.notifier)
+                            .switchStation(stationId);
+                      }
                     },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'BD-GATE-01',
-                        child: Text('BD-GATE-01 (Bình Dương - ENTRY)'),
-                      ),
-                      const PopupMenuItem(
-                        value: 'BD-GATE-02',
-                        child: Text('BD-GATE-02 (Bình Dương - EXIT)'),
-                      ),
-                      const PopupMenuItem(
-                        value: 'LA-GATE-01',
-                        child: Text('LA-GATE-01 (Long An - ENTRY)'),
-                      ),
-                      const PopupMenuItem(
-                        value: 'BD-MAINT-01',
-                        child: Text('BD-MAINT-01 (Vô hiệu hóa test)'),
-                      ),
-                    ],
+                    itemBuilder: (context) => dynamicStations.map((st) {
+                      final isSelected = st.stationId == state.activeStation.stationId;
+                      return PopupMenuItem<String>(
+                        value: st.stationId,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: st.isActive ? Colors.green.shade600 : Colors.red.shade600,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        st.stationId,
+                                        style: TextStyle(
+                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                          fontSize: 13,
+                                          color: isSelected ? Colors.blue.shade700 : const Color(0xFF1E293B),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: st.direction == 'ENTRY'
+                                              ? Colors.blue.shade50
+                                              : Colors.amber.shade50,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          st.direction,
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                            color: st.direction == 'ENTRY'
+                                                ? Colors.blue.shade800
+                                                : Colors.amber.shade900,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    st.gateIdentifier,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.blueGrey.shade600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isSelected)
+                              Icon(
+                                Icons.check_circle_rounded,
+                                size: 16,
+                                color: Colors.blue.shade700,
+                              ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
                   ),
                 ],
               ),
             ),
+
+            // Inactive Kiosk Warning Banner
+            if (!isStationActive) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange.shade300),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.deepOrange),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'CỔNG KIOSK NÀY ĐANG DỪNG HOẠT ĐỘNG (INACTIVE). Mọi lượt quét thẻ sẽ bị từ chối với lý do STATION_INACTIVE.',
+                        style: TextStyle(
+                          color: Colors.deepOrange,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             // M2 Edge Resilience: Offline Banner and Sync Actions
             if (state.isSimulatingOffline || state.offlineQueue.isNotEmpty || state.syncStatusMessage != null) ...[
@@ -238,7 +479,10 @@ class _GateStationKioskScreenState
 
             // QR Camera Viewfinder
             Center(
-              child: QRViewfinder(isScanning: isScanning),
+              child: QRViewfinder(
+                isScanning: isScanning,
+                onScanned: _onTriggerScan,
+              ),
             ),
 
             const SizedBox(height: 16),
@@ -252,71 +496,75 @@ class _GateStationKioskScreenState
 
             const SizedBox(height: 20),
 
-            // Quick Test Cases Header
-            Row(
-              children: [
-                const Icon(Icons.touch_app_rounded,
-                    size: 18, color: Colors.blueGrey),
-                const SizedBox(width: 6),
-                Text(
-                  'Thử nghiệm nhanh mẫu QR (Quick Test Payloads):',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blueGrey.shade800,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // Quick Test Buttons Wrap
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _testQRCredentials.map((item) {
-                return ActionChip(
-                  avatar: const Icon(Icons.qr_code, size: 16),
-                  label: Text(
-                    item['label']!,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  onPressed: () => _onTriggerScan(item['payload']!),
-                  tooltip: item['desc'],
-                );
-              }).toList(),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Manual QR Input Form
+            // Production Manual QR / Barcode Input Bar
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
                 border: Border.all(color: Colors.grey.shade200),
               ),
               child: Row(
                 children: [
+                  Icon(Icons.keyboard_alt_outlined, color: Colors.indigo.shade400, size: 22),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: TextField(
                       controller: _qrInputController,
                       decoration: const InputDecoration(
                         isDense: true,
-                        hintText: 'Nhập hoặc dán chuỗi QR payload...',
+                        hintText: 'Nhập hoặc dùng máy quét mã vạch USB/Bluetooth...',
+                        hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
                         border: InputBorder.none,
                       ),
+                      onSubmitted: (val) {
+                        if (val.trim().isNotEmpty) {
+                          _onTriggerScan(val.trim());
+                          _qrInputController.clear();
+                        }
+                      },
                     ),
                   ),
+                  IconButton(
+                    tooltip: 'Dán mã QR từ bộ nhớ tạm (Paste)',
+                    icon: Icon(Icons.content_paste_rounded, size: 20, color: Colors.indigo.shade600),
+                    onPressed: () async {
+                      final data = await Clipboard.getData(Clipboard.kTextPlain);
+                      if (data?.text != null && data!.text!.trim().isNotEmpty) {
+                        _qrInputController.text = data.text!.trim();
+                        _onTriggerScan(data.text!.trim());
+                        _qrInputController.clear();
+                      }
+                    },
+                  ),
+                  const SizedBox(width: 4),
+                  if (_qrInputController.text.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.clear, size: 18, color: Colors.grey),
+                      onPressed: () => setState(() => _qrInputController.clear()),
+                    ),
                   ElevatedButton.icon(
-                    onPressed: () => _onTriggerScan(_qrInputController.text),
-                    icon: const Icon(Icons.qr_code_scanner, size: 18),
-                    label: const Text('QUÉT'),
+                    onPressed: () {
+                      if (_qrInputController.text.trim().isNotEmpty) {
+                        _onTriggerScan(_qrInputController.text.trim());
+                        _qrInputController.clear();
+                      }
+                    },
+                    icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                    label: const Text('Xác thực thẻ'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).primaryColor,
+                      backgroundColor: Colors.indigo.shade700,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      elevation: 0,
                     ),
                   ),
                 ],

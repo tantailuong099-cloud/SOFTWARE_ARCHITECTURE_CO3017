@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:tmc_gate_app/features/auth/presentation/providers/auth_provider.dart';
+import 'package:tmc_gate_app/features/auth/domain/user_role.dart';
+import '../providers/auth_provider.dart';
 
 class WelcomeRoleScreen extends ConsumerWidget {
   const WelcomeRoleScreen({super.key});
@@ -9,18 +10,15 @@ class WelcomeRoleScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authNotifierProvider);
-    final role = (authState.role ?? 'EMPLOYEE').toUpperCase();
+    final userRole = AppUserRole.fromString(authState.role);
     final name = authState.name ?? authState.email ?? 'Người dùng';
     final employeeCode = authState.employeeCode ?? 'N/A';
     final token = authState.accessToken ?? '';
 
-    // Render text based on role as requested
-    bool isAdmin = role == 'ADMIN';
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Xác nhận Đăng nhập Thành công'),
-        backgroundColor: isAdmin ? Colors.indigo[800] : Colors.teal[700],
+        backgroundColor: userRole.primaryColor,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -38,7 +36,7 @@ class WelcomeRoleScreen extends ConsumerWidget {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 600),
+              constraints: const BoxConstraints(maxWidth: 640),
               child: Card(
                 elevation: 4,
                 shape: RoundedRectangleBorder(
@@ -52,17 +50,11 @@ class WelcomeRoleScreen extends ConsumerWidget {
                       // Role Icon / Badge
                       CircleAvatar(
                         radius: 40,
-                        backgroundColor: isAdmin
-                            ? Colors.indigo.shade100
-                            : Colors.teal.shade100,
+                        backgroundColor: userRole.backgroundColor,
                         child: Icon(
-                          isAdmin
-                              ? Icons.admin_panel_settings_rounded
-                              : Icons.badge_rounded,
+                          userRole.icon,
                           size: 40,
-                          color: isAdmin
-                              ? Colors.indigo[800]
-                              : Colors.teal[700],
+                          color: userRole.primaryColor,
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -80,11 +72,9 @@ class WelcomeRoleScreen extends ConsumerWidget {
                       Text(
                         name,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: isAdmin
-                              ? Colors.indigo[800]
-                              : Colors.teal[700],
-                        ),
+                              fontWeight: FontWeight.w600,
+                              color: userRole.primaryColor,
+                            ),
                       ),
                       Text(
                         'Mã NV: $employeeCode | Email: ${authState.email}',
@@ -92,46 +82,29 @@ class WelcomeRoleScreen extends ConsumerWidget {
                       ),
                       const Divider(height: 36),
 
-                      // ROLE-SPECIFIC RENDER TEXT AS REQUESTED
+                      // ROLE-SPECIFIC INFO CARD
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: isAdmin
-                              ? Colors.indigo.shade50
-                              : Colors.teal.shade50,
+                          color: userRole.backgroundColor,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isAdmin
-                                ? Colors.indigo.shade200
-                                : Colors.teal.shade200,
-                          ),
+                          border: Border.all(color: userRole.borderColor),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                Icon(
-                                  isAdmin
-                                      ? Icons.verified_user
-                                      : Icons.check_circle_outline,
-                                  color: isAdmin
-                                      ? Colors.indigo[700]
-                                      : Colors.teal[700],
-                                ),
+                                Icon(userRole.icon, color: userRole.primaryColor),
                                 const SizedBox(width: 8),
                                 Flexible(
                                   child: Text(
-                                    isAdmin
-                                        ? 'Quyền Hạn: Quản trị viên (ADMIN)'
-                                        : 'Quyền Hạn: Nhân viên (EMPLOYEE)',
+                                    'Quyền Hạn: ${userRole.title}',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16,
-                                      color: isAdmin
-                                          ? Colors.indigo[900]
-                                          : Colors.teal[900],
+                                      color: userRole.primaryColor,
                                     ),
                                   ),
                                 ),
@@ -139,21 +112,87 @@ class WelcomeRoleScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              isAdmin
-                                  ? 'Chào mừng Quản trị viên! Bạn có toàn quyền quản lý hệ thống trạm kiểm soát, giám sát nhật ký ra vào toàn công ty và cấu hình các thiết bị bảo vệ.'
-                                  : 'Chào mừng Nhân viên! Bạn có thể xem mã QR cá nhân của mình để điểm danh qua trạm kiểm soát ra vào công ty.',
+                              userRole.description,
                               style: TextStyle(
                                 fontSize: 14,
                                 height: 1.5,
-                                color: isAdmin
-                                    ? Colors.indigo[900]
-                                    : Colors.teal[900],
+                                color: Colors.grey.shade900,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
+
+                      // UI ACCESS CONTROL MATRIX CARD
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.lock_person_outlined,
+                                  size: 20,
+                                  color: Colors.blueGrey.shade800,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Phân quyền truy cập giao diện (UI Access Control)',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: Colors.blueGrey.shade900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            _buildPermissionItem(
+                              context,
+                              title: 'Trạm quét Kiosk (Gate Station)',
+                              isAllowed: userRole.canAccessKiosk,
+                              note: userRole.canAccessKiosk
+                                  ? 'Được phép vận hành trạm quét và điều khiển cổng barie.'
+                                  : 'Bị chặn (Chỉ dành cho ADMIN & SECURITY_GUARD).',
+                            ),
+                            const Divider(height: 16),
+                            _buildPermissionItem(
+                              context,
+                              title: 'Nhật ký sự kiện ra vào (Gate Events)',
+                              isAllowed: userRole.canAccessRecentEvents,
+                              note: userRole.canAccessRecentEvents
+                                  ? 'Được phép theo dõi luồng sự kiện quẹt thẻ vào/ra.'
+                                  : 'Bị chặn (Không dành cho vai trò EMPLOYEE).',
+                            ),
+                            const Divider(height: 16),
+                            _buildPermissionItem(
+                              context,
+                              title: 'Mã QR Thẻ nhân viên (Employee QR Card)',
+                              isAllowed: userRole.canAccessQrCard,
+                              note:
+                                  'Được phép hiển thị mã QR tĩnh và mã QR động 30s qua cổng.',
+                            ),
+                            const Divider(height: 16),
+                            _buildPermissionItem(
+                              context,
+                              title: 'Cấu hình trạm & kết nối API (Station Settings)',
+                              isAllowed: userRole.canAccessSettings,
+                              note: userRole.canAccessSettings
+                                  ? 'Được phép cấu hình endpoint API và thiết bị trạm.'
+                                  : 'Bị chặn (Chỉ dành riêng cho ADMIN).',
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
 
                       // Token display section
                       ExpansionTile(
@@ -187,13 +226,57 @@ class WelcomeRoleScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 24),
 
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: () => context.goNamed('dashboard'),
-                          child: const Text('Open dashboard'),
+                      // Site Selection Buttons
+                      if (userRole == AppUserRole.admin) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: () => context.go('/admin'),
+                            icon: const Icon(Icons.admin_panel_settings_rounded, size: 18),
+                            label: const Text('Truy Cập Site Quản Trị (Admin Portal)'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.indigo.shade800,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.tonalIcon(
+                            onPressed: () => context.go('/user'),
+                            icon: const Icon(Icons.badge_rounded, size: 18),
+                            label: const Text('Xem Giao Diện Thẻ Nhân Viên (User Portal)'),
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ] else ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: () => context.go('/user'),
+                            icon: const Icon(Icons.badge_rounded, size: 18),
+                            label: const Text('Vào Giao Diện Nhân Viên (User Portal)'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.blue.shade700,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 12),
 
                       // Logout button
@@ -225,6 +308,80 @@ class WelcomeRoleScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPermissionItem(
+    BuildContext context, {
+    required String title,
+    required bool isAllowed,
+    required String note,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          isAllowed ? Icons.check_circle_rounded : Icons.cancel_rounded,
+          color: isAllowed ? Colors.green.shade600 : Colors.red.shade600,
+          size: 18,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isAllowed
+                          ? Colors.green.shade50
+                          : Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: isAllowed
+                            ? Colors.green.shade300
+                            : Colors.red.shade300,
+                      ),
+                    ),
+                    child: Text(
+                      isAllowed ? 'Cho phép' : 'Bị chặn',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: isAllowed
+                            ? Colors.green.shade800
+                            : Colors.red.shade800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                note,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

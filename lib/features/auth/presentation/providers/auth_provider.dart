@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 import 'package:tmc_gate_app/core/config/api_endpoint_settings.dart';
 import 'package:tmc_gate_app/features/auth/data/auth_repository.dart';
+import 'package:tmc_gate_app/features/gate_station/presentation/providers/kiosk_management_provider.dart';
 
 final authNotifierProvider = NotifierProvider<AuthNotifier, AuthState>(() {
   return AuthNotifier();
@@ -102,6 +103,9 @@ class AuthNotifier extends Notifier<AuthState> {
                 name: data['name'],
                 employeeCode: data['employeeCode'],
               );
+        if (token != null) {
+          ref.invalidate(kioskManagementProvider);
+        }
       } catch (_) {
         if (_isCurrent(generation)) state = AuthState();
       }
@@ -129,6 +133,7 @@ class AuthNotifier extends Notifier<AuthState> {
           name: user['fullName'],
           employeeCode: user['employeeCode'],
         );
+        ref.invalidate(kioskManagementProvider);
         return true;
       } catch (error) {
         if (!_isCurrent(generation)) return false;

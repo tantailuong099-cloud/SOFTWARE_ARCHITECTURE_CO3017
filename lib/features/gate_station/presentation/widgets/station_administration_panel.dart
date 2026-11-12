@@ -81,7 +81,7 @@ class _StationAdministrationPanelState
           : StationUpdateDraft.validate(fields: fields, status: _status);
       if (!submit) {
         setState(
-          () => _message = 'Draft is valid. Server configuration is unchanged.',
+          () => _message = 'Bản nháp thông số phần cứng hợp lệ! Cấu hình máy chủ chưa thay đổi.',
         );
         return;
       }
@@ -94,20 +94,20 @@ class _StationAdministrationPanelState
           await service!.update(widget.station.stationId, update!);
         }
         if (mounted) {
-          setState(() => _message = 'Server accepted the configuration.');
+          setState(() => _message = 'Máy chủ đã chấp nhận và lưu cấu hình.');
         }
       } on Exception {
         if (mounted) {
           setState(
             () => _message =
-                'The server rejected the configuration or could not be reached.',
+                'Máy chủ từ chối cấu hình hoặc không thể kết nối tới trạm.',
           );
         }
       } finally {
         if (mounted) setState(() => _submitting = false);
       }
     } on FormatException catch (error) {
-      setState(() => _message = error.message);
+      setState(() => _message = 'Lỗi nhập liệu: ${error.message}');
     }
   }
 
@@ -118,70 +118,182 @@ class _StationAdministrationPanelState
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (service == null)
-          const Text(
-            'Draft validation only. Server changes require secure administrator access, validation, and audit support.',
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline_rounded, size: 20, color: Colors.blue.shade700),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Chế độ kiểm thử thông số phần cứng (Local Turnstile Simulator). '
+                    'Để quản lý và chỉnh sửa trực tiếp dữ liệu trạm trên máy chủ, bạn cũng có thể sử dụng tab Quản Lý Cổng.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue.shade900,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         Wrap(
           spacing: 8,
+          runSpacing: 8,
           children: [
             ChoiceChip(
-              label: const Text('Edit selected station'),
+              avatar: const Icon(Icons.edit_note_rounded, size: 16),
+              label: const Text('Chỉnh sửa trạm hiện tại'),
               selected: !_registering,
               onSelected: _submitting ? null : (_) => _changeMode(false),
             ),
             ChoiceChip(
-              label: const Text('Register new station'),
+              avatar: const Icon(Icons.add_circle_outline_rounded, size: 16),
+              label: const Text('Đăng ký trạm mới'),
               selected: _registering,
               onSelected: _submitting ? null : (_) => _changeMode(true),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 14),
         if (_registering) ...[
-          _input(_stationId, 'Station ID'),
+          _input(_stationId, 'Mã trạm (Station ID, ví dụ: BD-GATE-05)', icon: Icons.badge_outlined),
           _choice(
-            'Factory',
+            'Nhà máy (Factory)',
             _factory,
             stationFactoryIds,
             (value) => _factory = value,
+            icon: Icons.factory_outlined,
           ),
         ] else ...[
-          const Text(
-            'Edit draft starts from the local station selection. '
-            'The backend configuration above may differ.',
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Mã trạm: ${widget.station.stationId}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Nhà máy: ${widget.station.factoryId}',
+                        style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: widget.station.isActive ? Colors.green.shade50 : Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: widget.station.isActive ? Colors.green.shade300 : Colors.red.shade300,
+                    ),
+                  ),
+                  child: Text(
+                    widget.station.status,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: widget.station.isActive ? Colors.green.shade800 : Colors.red.shade800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          Text('Station ID: ${widget.station.stationId}'),
-          Text('Factory: ${widget.station.factoryId}'),
         ],
-        _input(_gateIdentifier, 'Gate identifier'),
+        _input(_gateIdentifier, 'Tên định danh cổng (Gate Identifier)', icon: Icons.door_front_door_outlined),
         _choice(
-          'Direction',
+          'Hướng di chuyển qua cổng (Direction)',
           _direction,
           StationDirection.values.map((item) => item.value),
           (value) => _direction = value,
+          icon: Icons.swap_vert_rounded,
         ),
-        _input(_controllerEndpoint, 'Turnstile controller endpoint', url: true),
+        _input(
+          _controllerEndpoint,
+          'Địa chỉ Turnstile Controller Endpoint (URL phần cứng)',
+          url: true,
+          icon: Icons.settings_ethernet_rounded,
+        ),
         if (!_registering)
           _choice(
-            'Station status',
+            'Trạng thái cổng (Station Status)',
             _status,
             StationStatus.values.map((item) => item.value),
             (value) => _status = value,
+            icon: Icons.toggle_on_outlined,
           ),
-        if (_message != null) Text(_message!),
-        Wrap(
-          spacing: 8,
-          children: [
-            OutlinedButton(
-              onPressed: _submitting ? null : () => _validate(),
-              child: const Text('Validate draft'),
+        if (_message != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _message!.contains('Lỗi') ? Colors.red.shade50 : Colors.green.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: _message!.contains('Lỗi') ? Colors.red.shade200 : Colors.green.shade300,
+              ),
             ),
-            FilledButton(
+            child: Row(
+              children: [
+                Icon(
+                  _message!.contains('Lỗi') ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
+                  size: 18,
+                  color: _message!.contains('Lỗi') ? Colors.red.shade700 : Colors.green.shade700,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _message!,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _message!.contains('Lỗi') ? Colors.red.shade900 : Colors.green.shade900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              icon: const Icon(Icons.rule_folder_rounded, size: 18),
+              onPressed: _submitting ? null : () => _validate(),
+              label: const Text('Kiểm tra hợp lệ (Validate)'),
+            ),
+            FilledButton.icon(
+              icon: Icon(_registering ? Icons.add_rounded : Icons.save_rounded, size: 18),
               onPressed: service == null || _submitting
                   ? null
                   : () => _validate(submit: true),
-              child: Text(
-                _registering ? 'Register on server' : 'Save to server',
+              label: Text(
+                _registering ? 'Đăng ký lên máy chủ' : 'Lưu lên máy chủ',
               ),
             ),
           ],
@@ -202,13 +314,19 @@ class _StationAdministrationPanelState
     TextEditingController controller,
     String label, {
     bool url = false,
+    IconData? icon,
   }) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 5),
+    padding: const EdgeInsets.symmetric(vertical: 6),
     child: TextField(
       controller: controller,
       enabled: !_submitting,
       keyboardType: url ? TextInputType.url : TextInputType.text,
-      decoration: InputDecoration(labelText: label),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: icon != null ? Icon(icon, size: 20) : null,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      ),
     ),
   );
 
@@ -216,20 +334,29 @@ class _StationAdministrationPanelState
     String label,
     String value,
     Iterable<String> options,
-    ValueChanged<String> onChanged,
-  ) => DropdownButtonFormField<String>(
-    key: ValueKey((label, _registering)),
-    initialValue: value,
-    isExpanded: true,
-    decoration: InputDecoration(labelText: label),
-    items: [
-      for (final option in options)
-        DropdownMenuItem(value: option, child: Text(option)),
-    ],
-    onChanged: _submitting
-        ? null
-        : (value) {
-            if (value != null) onChanged(value);
-          },
+    ValueChanged<String> onChanged, {
+    IconData? icon,
+  }) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: DropdownButtonFormField<String>(
+      key: ValueKey((label, _registering)),
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: icon != null ? Icon(icon, size: 20) : null,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      ),
+      items: [
+        for (final option in options)
+          DropdownMenuItem(value: option, child: Text(option)),
+      ],
+      onChanged: _submitting
+          ? null
+          : (value) {
+              if (value != null) onChanged(value);
+            },
+    ),
   );
 }
