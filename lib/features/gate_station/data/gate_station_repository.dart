@@ -87,6 +87,55 @@ class GateStationRepository implements DynamicQRSource {
     }
   }
 
+  Future<List<RecentGateEvent>> fetchEmployeeEvents(String employeeId, {int limit = 50}) async {
+    try {
+      final response = await _dio.get(
+        '/access/events',
+        queryParameters: {
+          'employeeId': employeeId,
+          'limit': limit,
+        },
+      );
+      final data = response.data;
+      final events = <RecentGateEvent>[];
+      if (data is Map && data['events'] is List) {
+        for (final row in data['events']) {
+          if (row is Map<String, dynamic>) {
+            try {
+              events.add(parseRecentGateEvent(row));
+            } catch (_) {}
+          }
+        }
+      }
+      return List.unmodifiable(events);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<List<RecentGateEvent>> fetchAllEvents({int limit = 50}) async {
+    try {
+      final response = await _dio.get(
+        '/access/events',
+        queryParameters: {'limit': limit},
+      );
+      final data = response.data;
+      final events = <RecentGateEvent>[];
+      if (data is Map && data['events'] is List) {
+        for (final row in data['events']) {
+          if (row is Map<String, dynamic>) {
+            try {
+              events.add(parseRecentGateEvent(row));
+            } catch (_) {}
+          }
+        }
+      }
+      return List.unmodifiable(events);
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<List<GateStation>> fetchGateStations() async {
     try {
       final response = await _dio.get('/gate-stations');
@@ -98,6 +147,76 @@ class GateStationRepository implements DynamicQRSource {
       return [];
     } catch (_) {
       return [];
+    }
+  }
+
+  Future<GateStation> createGateStation({
+    required String stationCode,
+    required String name,
+    required String factoryId,
+    required String direction,
+    required String location,
+    String status = 'ACTIVE',
+  }) async {
+    try {
+      final payload = {
+        'stationCode': stationCode.trim(),
+        'name': name.trim(),
+        'factoryId': factoryId,
+        'direction': direction,
+        'location': location.trim(),
+        'status': status,
+      };
+      final response = await _dio.post('/gate-stations', data: payload);
+      return GateStation.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      final msg = e.response?.data?['message'] ?? e.message ?? 'Không thể tạo cổng Kiosk';
+      throw Exception(msg is List ? msg.join(', ') : msg.toString());
+    }
+  }
+
+  Future<GateStation> updateGateStation(
+    String stationCode, {
+    String? name,
+    String? factoryId,
+    String? direction,
+    String? location,
+  }) async {
+    try {
+      final payload = <String, dynamic>{
+        if (name != null) 'name': name.trim(),
+        if (factoryId != null) 'factoryId': factoryId,
+        if (direction != null) 'direction': direction,
+        if (location != null) 'location': location.trim(),
+      };
+      final response = await _dio.patch('/gate-stations/$stationCode', data: payload);
+      return GateStation.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      final msg = e.response?.data?['message'] ?? e.message ?? 'Không thể cập nhật cổng Kiosk';
+      throw Exception(msg is List ? msg.join(', ') : msg.toString());
+    }
+  }
+
+  Future<GateStation> updateGateStationStatus(String stationCode, String status) async {
+    try {
+      final response = await _dio.patch(
+        '/gate-stations/$stationCode/status',
+        data: {'status': status.toUpperCase()},
+      );
+      return GateStation.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      final msg = e.response?.data?['message'] ?? e.message ?? 'Không thể thay đổi trạng thái cổng Kiosk';
+      throw Exception(msg is List ? msg.join(', ') : msg.toString());
+    }
+  }
+
+  Future<bool> deleteGateStation(String stationCode) async {
+    try {
+      await _dio.delete('/gate-stations/$stationCode');
+      return true;
+    } on DioException catch (e) {
+      final msg = e.response?.data?['message'] ?? e.message ?? 'Không thể xóa cổng Kiosk';
+      throw Exception(msg is List ? msg.join(', ') : msg.toString());
     }
   }
 
@@ -126,7 +245,16 @@ class GateStationRepository implements DynamicQRSource {
   Future<DynamicQR> fetchDynamicQR(String employeeId) async {
     try {
       final id = Uri.encodeComponent(employeeId);
-      final response = await _dio.get('/user-qr/employees/$id/dynamic-qr');
+      Response response;
+      try {
+        response = await _dio.get('/user-qr/employees/$id/dynamic-qr');
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 404) {
+          response = await _dio.get('/qr/employees/$id/dynamic-qr');
+        } else {
+          rethrow;
+        }
+      }
       final data = response.data;
       if (data is! Map<String, dynamic>) {
         throw DynamicQRFailure.invalidResponse;

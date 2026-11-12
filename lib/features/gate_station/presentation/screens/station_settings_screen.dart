@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tmc_gate_app/core/widgets/access_denied_widget.dart';
+import 'package:tmc_gate_app/features/auth/domain/user_role.dart';
+import 'package:tmc_gate_app/features/auth/presentation/providers/auth_provider.dart';
 
 import '../../../../core/config/api_config.dart';
 import '../../../../core/config/api_endpoint.dart';
@@ -11,7 +14,8 @@ import '../providers/station_settings_controller.dart';
 import '../widgets/station_administration_panel.dart';
 
 class StationSettingsScreen extends ConsumerStatefulWidget {
-  const StationSettingsScreen({super.key});
+  final bool showAppBar;
+  const StationSettingsScreen({super.key, this.showAppBar = false});
 
   @override
   ConsumerState<StationSettingsScreen> createState() =>
@@ -43,7 +47,7 @@ class _StationSettingsScreenState extends ConsumerState<StationSettingsScreen> {
     try {
       warn = ApiEndpoint.parse(value).usesInsecureRemoteHttp;
     } on FormatException {
-      // Show validation errors when the user applies the URL.
+      // Bỏ qua lỗi cú pháp khi người dùng đang nhập
     }
     setState(() {
       _urlError = null;
@@ -75,21 +79,27 @@ class _StationSettingsScreenState extends ConsumerState<StationSettingsScreen> {
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Change backend address?'),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                SizedBox(width: 8),
+                Text('Thay đổi máy chủ API?'),
+              ],
+            ),
             content: Text(
-              'Use a trusted server. Future API requests go to the new address. Sign in again after changing the backend.'
-              '${next.usesInsecureRemoteHttp ? '\n\nHTTP outside local development sends data without transport encryption.' : ''}'
-              '${pending > 0 ? '\n\n$pending unsynchronized scans will stay in the queue.' : ''}'
-              '\n\nA later manual sync sends queued scans to the configured server.',
+              'Các yêu cầu API kế tiếp sẽ được chuyển hướng tới địa chỉ mới. Vui lòng đăng nhập lại sau khi đổi máy chủ.'
+              '${next.usesInsecureRemoteHttp ? '\n\nLưu ý: Kết nối HTTP bên ngoài môi trường phát triển cục bộ không có mã hóa dữ liệu truyền tải.' : ''}'
+              '${pending > 0 ? '\n\nHiện có $pending lượt quét ngoại tuyến chưa đồng bộ trong hàng đợi.' : ''}',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+                child: const Text('Hủy bỏ'),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Change address'),
+                child: const Text('Đồng ý đổi địa chỉ'),
               ),
             ],
           ),
@@ -107,10 +117,14 @@ class _StationSettingsScreenState extends ConsumerState<StationSettingsScreen> {
       _url.text = next.value;
       setState(() => _warnHttp = next.usesInsecureRemoteHttp);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'API address applied. See the connection check for reachability.',
+            restoreDefault
+                ? 'Đã khôi phục địa chỉ API về mặc định (${next.value}).'
+                : 'Đã lưu và áp dụng địa chỉ API mới thành công.',
           ),
+          backgroundColor: Colors.green.shade800,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } on ApiEndpointUpdateFailure catch (failure) {
@@ -118,13 +132,13 @@ class _StationSettingsScreenState extends ConsumerState<StationSettingsScreen> {
       setState(() {
         _urlError = switch (failure) {
           ApiEndpointUpdateFailure.application =>
-            'Could not prepare the API address. The current address is still in use.',
+            'Không thể thiết lập địa chỉ API. Địa chỉ hiện tại vẫn đang được dùng.',
           ApiEndpointUpdateFailure.persistenceUncertain =>
-            'The saved address could not be verified. The current address is still in use. Apply an address again before restarting.',
+            'Không thể kiểm tra địa chỉ đã lưu. Hãy thử áp dụng lại.',
           ApiEndpointUpdateFailure.persistence =>
-            'Could not save the API address. The current address is still in use.',
+            'Không thể lưu địa chỉ API vào bộ nhớ bảo mật thiết bị.',
           ApiEndpointUpdateFailure.busy =>
-            'An API address change is already in progress.',
+            'Hệ thống đang bận cập nhật địa chỉ API.',
         };
       });
     } finally {
@@ -134,162 +148,740 @@ class _StationSettingsScreenState extends ConsumerState<StationSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authNotifierProvider);
+    final userRole = AppUserRole.fromString(authState.role);
+    if (authState.isAuthenticated && !userRole.canAccessSettings) {
+      return Scaffold(
+        appBar: widget.showAppBar ? AppBar(title: const Text('Cấu Hình Trạm & Kết Nối Backend')) : null,
+        body: AccessDeniedWidget(
+          title: 'Từ chối quyền truy cập Cấu hình',
+          message:
+              'Chức năng cấu hình thiết bị trạm và địa chỉ API chỉ dành riêng cho Quản trị viên (ADMIN).',
+          currentRole: userRole,
+        ),
+      );
+    }
     final local = ref.watch(
       gateStationNotifierProvider.select((state) => state.activeStation),
     );
     final endpoint = ref.watch(apiEndpointSettingsProvider);
     final remote = ref.watch(stationConfigurationProvider);
-    final connection = remote.when(
-      skipLoadingOnRefresh: false,
-      loading: () => 'Checking station details on the applied backend…',
-      data: (_) => 'Backend returned the selected station.',
-      error: (error, _) => switch (error) {
-        StationConfigurationFailure.unauthorized =>
-          'Backend denied access to station details.',
-        StationConfigurationFailure.notFound =>
-          'The selected station was not found on this backend.',
-        StationConfigurationFailure.invalidResponse =>
-          'Backend returned invalid station details.',
-        _ => 'Could not retrieve station details from the backend.',
-      },
-    );
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Station Settings (UC-05)')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _section('Active Gate Station', [
-            const Text('Local selection'),
-            _details(
-              stationId: local.stationId,
-              factoryId: local.factoryId,
-              gateIdentifier: local.gateIdentifier,
-              direction: local.direction,
-              status: local.status,
-              controllerEndpoint:
-                  StationConfiguration.visibleControllerEndpoint(
-                    local.controllerEndpoint,
-                  ),
-            ),
-            const Divider(),
-            const Text('Backend configuration'),
-            remote.when(
-              skipLoadingOnRefresh: false,
-              loading: () => const LinearProgressIndicator(),
-              error: (_, _) =>
-                  const Text('Remote configuration is unavailable.'),
-              data: (station) => _details(
-                stationId: station.stationId,
-                factoryId: station.factoryId,
-                gateIdentifier: station.gateIdentifier,
-                direction: station.direction.value,
-                status: station.status.value,
-                controllerEndpoint: station.controllerEndpoint,
-              ),
-            ),
-          ]),
-          _section('Backend Connection', [
-            Text('Current API Base URL: ${endpoint.value}'),
-            const Text(
-              'Use the API path required by your backend. This address is separate from the turnstile controller endpoint.',
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _url,
-              enabled: !_applying,
-              keyboardType: TextInputType.url,
-              autocorrect: false,
-              onChanged: _onUrlChanged,
-              decoration: InputDecoration(
-                labelText: 'API Base URL',
-                errorText: _urlError,
-                errorMaxLines: 3,
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            if (endpoint.usesInsecureRemoteHttp || _warnHttp)
-              const Text(
-                'Warning: HTTP outside local development is unencrypted.',
-              ),
-            Wrap(
-              spacing: 8,
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: widget.showAppBar
+          ? AppBar(
+              title: const Text('Cấu Hình Trạm & Kết Nối Backend'),
+              elevation: 0,
+            )
+          : null,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 960),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                FilledButton(
-                  onPressed: _applying ? null : () => _apply(),
-                  child: const Text('Apply address'),
+                // Header Banner
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                        ),
+                        child: const Icon(
+                          Icons.tune_rounded,
+                          color: Colors.lightBlueAccent,
+                          size: 28,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Cấu Hình Trạm & Kết Nối Backend',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Thiết lập địa chỉ Endpoint API máy chủ, kiểm tra độ trễ mạng và cấu hình cổng phần cứng.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.blueGrey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                OutlinedButton(
-                  onPressed: _applying
-                      ? null
-                      : () => _apply(restoreDefault: true),
-                  child: const Text('Restore default'),
+
+                // 1. Thông Tin Trạm Đang Hoạt Động (Active Gate Station)
+                _buildCard(
+                  title: 'Thông Tin Trạm Đang Hoạt Động',
+                  subtitle: 'Trạm kiểm soát hiện hành được chọn trên thiết bị này',
+                  icon: Icons.meeting_room_rounded,
+                  iconColor: Colors.indigo,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Active Gate Banner
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.blueGrey.shade100),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: local.direction == 'ENTRY'
+                                    ? Colors.blue.shade100
+                                    : Colors.amber.shade100,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                local.direction == 'ENTRY'
+                                    ? Icons.login_rounded
+                                    : Icons.logout_rounded,
+                                color: local.direction == 'ENTRY'
+                                    ? Colors.blue.shade800
+                                    : Colors.amber.shade900,
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        local.stationId,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: local.direction == 'ENTRY'
+                                              ? Colors.blue.shade50
+                                              : Colors.amber.shade50,
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(
+                                            color: local.direction == 'ENTRY'
+                                                ? Colors.blue.shade200
+                                                : Colors.amber.shade200,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          local.direction == 'ENTRY' ? 'LỐI VÀO' : 'LỐI RA',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: local.direction == 'ENTRY'
+                                                ? Colors.blue.shade800
+                                                : Colors.amber.shade900,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    local.gateIdentifier,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey.shade700,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: local.isActive ? Colors.green.shade50 : Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: local.isActive ? Colors.green.shade300 : Colors.red.shade300,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.circle,
+                                    size: 8,
+                                    color: local.isActive ? Colors.green.shade600 : Colors.red.shade600,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    local.status,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: local.isActive ? Colors.green.shade800 : Colors.red.shade800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Grid specs
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isNarrow = constraints.maxWidth < 600;
+                          return isNarrow
+                              ? Column(
+                                  children: [
+                                    _specRow('Khu vực Nhà máy', local.factoryId == 'BINH_DUONG' ? 'Bình Dương (BINH_DUONG)' : 'Long An (LONG_AN)', Icons.business_rounded),
+                                    _specRow('Hardware Controller', StationConfiguration.visibleControllerEndpoint(local.controllerEndpoint)?.toString() ?? 'Chưa kết nối (Local Simulated)', Icons.hardware_rounded),
+                                  ],
+                                )
+                              : Row(
+                                  children: [
+                                    Expanded(child: _specTile('Khu vực Nhà máy', local.factoryId == 'BINH_DUONG' ? 'Bình Dương (BINH_DUONG)' : 'Long An (LONG_AN)', Icons.business_rounded)),
+                                    const SizedBox(width: 12),
+                                    Expanded(child: _specTile('Hardware Controller', StationConfiguration.visibleControllerEndpoint(local.controllerEndpoint)?.toString() ?? 'Chưa kết nối (Simulated)', Icons.hardware_rounded)),
+                                  ],
+                                );
+                        },
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Backend Sync Status Banner
+                      remote.when(
+                        skipLoadingOnRefresh: false,
+                        loading: () => Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: const Row(
+                            children: [
+                              SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                              SizedBox(width: 12),
+                              Text('Đang truy vấn trạng thái trạm từ máy chủ backend...', style: TextStyle(fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        error: (_, _) => Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.amber.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.cloud_off_rounded, size: 20, color: Colors.amber.shade800),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Cấu hình từ xa chưa sẵn sàng hoặc máy chủ tạm thời không thể truy cập.',
+                                  style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        data: (station) => Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.green.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.cloud_done_rounded, size: 20, color: Colors.green.shade700),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Đã đồng bộ thành công với máy chủ (${station.stationId} • ${station.gateIdentifier})',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.green.shade900),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                TextButton(
-                  onPressed: remote.isLoading || _applying
-                      ? null
-                      : () => ref.invalidate(stationConfigurationProvider),
-                  child: const Text('Check applied connection'),
+                const SizedBox(height: 18),
+
+                // 2. Cấu Hình Kết Nối Backend (API Base URL)
+                _buildCard(
+                  title: 'Địa Chỉ Máy Chủ Backend (API Base URL)',
+                  subtitle: 'Đường dẫn dịch vụ API cho toàn bộ các chức năng xác thực và điểm danh',
+                  icon: Icons.dns_rounded,
+                  iconColor: Colors.blue.shade700,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Active URL Pill
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.link_rounded, size: 18, color: Colors.blueGrey),
+                            const SizedBox(width: 8),
+                            const Text('Địa chỉ đang dùng: ', style: TextStyle(fontSize: 12, color: Colors.blueGrey)),
+                            Expanded(
+                              child: Text(
+                                endpoint.value,
+                                style: const TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Color(0xFF0F172A),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Presets from .env
+                      if (ApiConfig.availablePresets.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        const Row(
+                          children: [
+                            Icon(Icons.flash_on_rounded, size: 16, color: Colors.amber),
+                            SizedBox(width: 6),
+                            Text(
+                              'Cấu hình nhanh từ .env (Presets):',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: ApiConfig.availablePresets.map((preset) {
+                            final isSelected = _url.text.trim() == preset.url.trim();
+                            return Tooltip(
+                              message: preset.url,
+                              child: FilterChip(
+                                selected: isSelected,
+                                selectedColor: Colors.blue.shade100,
+                                checkmarkColor: Colors.blue.shade800,
+                                avatar: Icon(
+                                  isSelected ? Icons.check_circle_rounded : Icons.sensors_rounded,
+                                  size: 16,
+                                  color: isSelected ? Colors.blue.shade800 : Colors.blueGrey,
+                                ),
+                                label: Text(
+                                  preset.name.isNotEmpty ? preset.name : preset.key,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                    color: isSelected ? Colors.blue.shade900 : Colors.black87,
+                                  ),
+                                ),
+                                onSelected: _applying
+                                    ? null
+                                    : (_) {
+                                        setState(() {
+                                          _url.text = preset.url;
+                                          _onUrlChanged(preset.url);
+                                        });
+                                      },
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+
+                      // Text input for URL
+                      TextField(
+                        controller: _url,
+                        enabled: !_applying,
+                        keyboardType: TextInputType.url,
+                        autocorrect: false,
+                        onChanged: _onUrlChanged,
+                        decoration: InputDecoration(
+                          labelText: 'Đường dẫn API Base URL',
+                          hintText: 'http://localhost:3000/api',
+                          errorText: _urlError,
+                          errorMaxLines: 3,
+                          prefixIcon: const Icon(Icons.link_rounded),
+                          suffixIcon: _url.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear_rounded, size: 18),
+                                  onPressed: () {
+                                    _url.clear();
+                                    _onUrlChanged('');
+                                  },
+                                )
+                              : null,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+
+                      if (endpoint.usesInsecureRemoteHttp || _warnHttp) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.amber.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded, size: 18, color: Colors.amber.shade800),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Cảnh báo: Kết nối HTTP từ xa không có mã hóa TLS. Khuyến khích sử dụng HTTPS trên production.',
+                                  style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 14),
+
+                      // Action Buttons
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 8,
+                        children: [
+                          FilledButton.icon(
+                            icon: _applying
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.check_rounded, size: 18),
+                            onPressed: _applying ? null : () => _apply(),
+                            label: const Text('Áp dụng địa chỉ'),
+                          ),
+                          OutlinedButton.icon(
+                            icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                            onPressed: _applying ? null : () => _apply(restoreDefault: true),
+                            label: const Text('Khôi phục mặc định'),
+                          ),
+                          OutlinedButton.icon(
+                            icon: const Icon(Icons.wifi_find_rounded, size: 18),
+                            onPressed: remote.isLoading || _applying
+                                ? null
+                                : () => ref.invalidate(stationConfigurationProvider),
+                            label: const Text('Kiểm tra kết nối'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Reachability result banner
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              remote.hasValue ? Icons.check_circle_outline_rounded : Icons.info_outline_rounded,
+                              size: 18,
+                              color: remote.hasValue ? Colors.green.shade700 : Colors.blueGrey,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _formatConnectionMessage(remote),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: remote.hasValue ? Colors.green.shade900 : Colors.blueGrey.shade800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                // 3. Điều Khiển Phần Cứng Cổng (Turnstile Controller)
+                _buildCard(
+                  title: 'Điều Khiển Phần Cứng Cổng (Turnstile Controller)',
+                  subtitle: 'Cấu hình thông số thiết bị phần cứng cổng xoay và điểm danh ngoại tuyến',
+                  icon: Icons.developer_board_rounded,
+                  iconColor: Colors.deepPurple,
+                  child: StationAdministrationPanel(
+                    key: ValueKey(local.stationId),
+                    station: local,
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                // 4. Thông Tin Hệ Thống (System Info)
+                _buildCard(
+                  title: 'Thông Tin Hệ Thống (System Information)',
+                  subtitle: 'Kiến trúc và các tiêu chuẩn vận hành sản xuất của ứng dụng',
+                  icon: Icons.shield_rounded,
+                  iconColor: Colors.teal,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 600;
+                      return Column(
+                        children: [
+                          if (isNarrow) ...[
+                            _infoTile('Phiên bản phần mềm', 'TMC Gate Kiosk v1.0.0 (Production)', Icons.verified_rounded, Colors.green),
+                            _infoTile('Kiến trúc giải pháp', 'Modular Monolith Backend & Flutter Client', Icons.architecture_rounded, Colors.blue),
+                            _infoTile('Tiêu chuẩn độ trễ', 'SLA <= 2.0s / lượt xác thực thẻ', Icons.speed_rounded, Colors.orange),
+                            _infoTile('Khả năng chịu lỗi', 'Hàng đợi ngoại tuyến Offline Resilient Queue', Icons.cloud_sync_rounded, Colors.purple),
+                          ] else ...[
+                            Row(
+                              children: [
+                                Expanded(child: _infoTile('Phiên bản phần mềm', 'TMC Gate Kiosk v1.0.0', Icons.verified_rounded, Colors.green)),
+                                const SizedBox(width: 12),
+                                Expanded(child: _infoTile('Kiến trúc giải pháp', 'Modular Monolith Architecture', Icons.architecture_rounded, Colors.blue)),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(child: _infoTile('Tiêu chuẩn độ trễ', 'SLA <= 2.0s / lượt quẹt', Icons.speed_rounded, Colors.orange)),
+                                const SizedBox(width: 12),
+                                Expanded(child: _infoTile('Khả năng chịu lỗi', 'Offline Resilient Queue', Icons.cloud_sync_rounded, Colors.purple)),
+                              ],
+                            ),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ],
             ),
-            Text(connection),
-          ]),
-          _section('Administrator Gate Configuration', [
-            StationAdministrationPanel(
-              key: ValueKey(local.stationId),
-              station: local,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color iconColor,
+    required Widget child,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: iconColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ]),
-          _section('Architecture', const [
-            Text(
-              'ADR-001 defines separate modules for QR management, gate stations, and attendance events.',
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Divider(height: 1),
             ),
-            Text(
-              'ADR-003 defines durable event recording and idempotent access requests as backend requirements.',
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _specTile(String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Colors.blueGrey),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF1E293B)),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-          ]),
+          ),
         ],
       ),
     );
   }
 
-  Widget _section(String title, List<Widget> children) => Card(
-    margin: const EdgeInsets.only(bottom: 16),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _specRow(String label, String value, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: _specTile(label, value, icon),
+    );
+  }
+
+  Widget _infoTile(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
         children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 18, color: color),
           ),
-          const SizedBox(height: 8),
-          ...children,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
-    ),
-  );
+    );
+  }
 
-  Widget _details({
-    required String stationId,
-    required String factoryId,
-    required String gateIdentifier,
-    required String direction,
-    required String status,
-    required Uri? controllerEndpoint,
-  }) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text('Station ID: $stationId'),
-      Text('Factory: $factoryId'),
-      Text('Gate identifier: $gateIdentifier'),
-      Text('Direction: $direction'),
-      Text('Status: $status'),
-      Text(
-        'Turnstile controller endpoint: ${controllerEndpoint ?? 'Unavailable'}',
-      ),
-    ],
-  );
+  String _formatConnectionMessage(AsyncValue<StationConfiguration> remote) {
+    return remote.when(
+      skipLoadingOnRefresh: false,
+      loading: () => 'Đang kiểm tra kết nối tới trạm trên máy chủ backend...',
+      data: (station) => 'Máy chủ đã xác nhận trạm ${station.stationId} kết nối tốt.',
+      error: (error, _) => switch (error) {
+        StationConfigurationFailure.unauthorized =>
+          'Máy chủ từ chối quyền truy cập cấu hình trạm (401/403).',
+        StationConfigurationFailure.notFound =>
+          'Không tìm thấy trạm này trên cơ sở dữ liệu của máy chủ.',
+        StationConfigurationFailure.invalidResponse =>
+          'Phản hồi từ máy chủ không đúng định dạng dữ liệu.',
+        _ => 'Không thể kết nối tới máy chủ API. Vui lòng kiểm tra lại địa chỉ hoặc mạng.',
+      },
+    );
+  }
 }

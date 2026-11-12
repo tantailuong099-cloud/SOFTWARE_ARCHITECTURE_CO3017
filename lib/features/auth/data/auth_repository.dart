@@ -29,7 +29,7 @@ class AuthRepository {
     try {
       final response = await _dio.post(
         '/auth/login',
-        data: {'email': email.trim(), 'password': password},
+        data: {'email': email.trim().toLowerCase(), 'password': password.trim()},
         options: Options(followRedirects: false),
       );
 
@@ -81,10 +81,12 @@ class AuthRepository {
         'role': role,
       };
     } on DioException catch (e) {
-      final message =
-          e.response?.data?['message'] ?? e.message ?? 'Đăng nhập thất bại';
-      debugPrint('[Auth API Failed] Login request failed: $message');
-      throw Exception(message is List ? message.join(', ') : message);
+      final serverMsg = e.response?.data?['message'];
+      final message = serverMsg is List
+          ? serverMsg.join(', ')
+          : serverMsg ?? e.message ?? 'Đăng nhập thất bại';
+      debugPrint('[Auth API Failed] URL: ${e.requestOptions.uri} | Status: ${e.response?.statusCode} | Lý do từ Server: $message');
+      throw Exception(message);
     } catch (e) {
       debugPrint('[Auth API Failed] Invalid login response: $e');
       throw Exception('Đăng nhập thất bại: $e');

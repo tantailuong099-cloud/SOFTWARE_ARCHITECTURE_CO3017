@@ -83,6 +83,7 @@ class GateStation {
   final String gateIdentifier;
   final String direction;
   final String status;
+  final String? location;
   final String? stationApiKey;
   final String? controllerEndpoint;
 
@@ -92,19 +93,62 @@ class GateStation {
     required this.gateIdentifier,
     required this.direction,
     required this.status,
+    this.location,
     this.stationApiKey,
     this.controllerEndpoint,
   });
 
+  bool get isActive => status.toUpperCase() == 'ACTIVE';
+
   factory GateStation.fromJson(Map<String, dynamic> json) {
+    final code = json['stationCode']?.toString() ?? json['stationId']?.toString() ?? '';
+    final name = json['name']?.toString() ?? json['gateIdentifier']?.toString() ?? code;
     return GateStation(
-      stationId: json['stationId'] as String? ?? '',
-      factoryId: json['factoryId'] as String? ?? '',
-      gateIdentifier: json['gateIdentifier'] as String? ?? '',
-      direction: json['direction'] as String? ?? 'ENTRY',
-      status: json['status'] as String? ?? 'ACTIVE',
-      stationApiKey: json['stationApiKey'] as String?,
-      controllerEndpoint: json['controllerEndpoint'] as String?,
+      stationId: code,
+      factoryId: json['factoryId']?.toString() ?? 'BINH_DUONG',
+      gateIdentifier: name,
+      direction: json['direction']?.toString() ?? 'ENTRY',
+      status: json['status']?.toString() ?? 'ACTIVE',
+      location: json['location']?.toString(),
+      stationApiKey: json['stationApiKey']?.toString(),
+      controllerEndpoint: json['controllerEndpoint']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'stationCode': stationId,
+      'stationId': stationId,
+      'name': gateIdentifier,
+      'gateIdentifier': gateIdentifier,
+      'factoryId': factoryId,
+      'direction': direction,
+      'location': location ?? gateIdentifier,
+      'status': status,
+      if (stationApiKey != null) 'stationApiKey': stationApiKey,
+      if (controllerEndpoint != null) 'controllerEndpoint': controllerEndpoint,
+    };
+  }
+
+  GateStation copyWith({
+    String? stationId,
+    String? factoryId,
+    String? gateIdentifier,
+    String? direction,
+    String? status,
+    String? location,
+    String? stationApiKey,
+    String? controllerEndpoint,
+  }) {
+    return GateStation(
+      stationId: stationId ?? this.stationId,
+      factoryId: factoryId ?? this.factoryId,
+      gateIdentifier: gateIdentifier ?? this.gateIdentifier,
+      direction: direction ?? this.direction,
+      status: status ?? this.status,
+      location: location ?? this.location,
+      stationApiKey: stationApiKey ?? this.stationApiKey,
+      controllerEndpoint: controllerEndpoint ?? this.controllerEndpoint,
     );
   }
 }

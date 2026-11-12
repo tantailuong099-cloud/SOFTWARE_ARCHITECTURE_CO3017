@@ -58,9 +58,9 @@ class DynamicQRController extends Notifier<DynamicQRState> {
     return const DynamicQRInitial();
   }
 
-  /// Null ends dynamic mode. Re-selecting the active employee is a no-op.
+  /// Null ends dynamic mode. Re-selecting the active employee is a no-op unless in error state.
   void selectEmployee(String? employeeId) {
-    if (employeeId == _employeeId) return;
+    if (employeeId == _employeeId && state is! DynamicQRError) return;
     _employeeId = employeeId;
     if (employeeId == null) {
       _invalidate();
