@@ -21,10 +21,14 @@ class ApiConfig {
   static const String fallbackBaseUrl = 'https://software-architecture-co3017-be.onrender.com/api';
 
   // Ưu tiên biến môi trường truyền qua --dart-define hoặc --dart-define-from-file=.env
-  static const String _envDefine =
-      String.fromEnvironment('API_BASE_URL', defaultValue: '');
-  static const String _envDefineAlt =
-      String.fromEnvironment('API_ENDPOINT', defaultValue: '');
+  static const String _envDefine = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: '',
+  );
+  static const String _envDefineAlt = String.fromEnvironment(
+    'API_ENDPOINT',
+    defaultValue: '',
+  );
 
   static String _loadedUrl = '';
 
@@ -126,14 +130,19 @@ class ApiConfig {
 
           // Trường hợp 1: Laptop chạy local (localhost hoặc 127.0.0.1)
           if (host == 'localhost' || host == '127.0.0.1' || host.isEmpty) {
-            final localPreset = presets.where((p) => p.key == 'LOCAL').firstOrNull;
-            _loadedUrl = localPreset?.url ?? envVars['API_URL_LOCAL'] ?? fallbackBaseUrl;
+            final localPreset = presets
+                .where((p) => p.key == 'LOCAL')
+                .firstOrNull;
+            _loadedUrl =
+                localPreset?.url ?? envVars['API_URL_LOCAL'] ?? fallbackBaseUrl;
             return;
           }
 
           // Trường hợp 2: Điện thoại mở qua VS Code Dev Tunnel (*.devtunnels.ms)
           if (host.contains('devtunnels.ms')) {
-            final tunnelPreset = presets.where((p) => p.key == 'TUNNEL').firstOrNull;
+            final tunnelPreset = presets
+                .where((p) => p.key == 'TUNNEL')
+                .firstOrNull;
             if (tunnelPreset != null && tunnelPreset.url.isNotEmpty) {
               _loadedUrl = tunnelPreset.url;
               return;
@@ -145,7 +154,9 @@ class ApiConfig {
           }
 
           // Trường hợp 3: Điện thoại mở qua IP Wi-Fi nội bộ (192.168.x.x, 10.x.x.x)
-          final isLanIp = RegExp(r'^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)').hasMatch(host);
+          final isLanIp = RegExp(
+            r'^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)',
+          ).hasMatch(host);
           if (isLanIp) {
             final lanPreset = presets.where((p) => p.key == 'LAN').firstOrNull;
             if (lanPreset != null && lanPreset.url.isNotEmpty) {
