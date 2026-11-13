@@ -579,24 +579,31 @@ class _UserPortalScreenState extends ConsumerState<UserPortalScreen> {
                         margin: const EdgeInsets.only(bottom: 10),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: Colors.grey.shade200),
+                          side: BorderSide(
+                            color: isApproved ? Colors.green.shade200 : Colors.red.shade200,
+                            width: 1,
+                          ),
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.all(14),
+                          padding: const EdgeInsets.all(12),
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               CircleAvatar(
+                                radius: 18,
                                 backgroundColor: isApproved ? Colors.green.shade50 : Colors.red.shade50,
                                 child: Icon(
                                   isApproved ? Icons.check_circle_outline : Icons.cancel_outlined,
                                   color: isApproved ? Colors.green.shade700 : Colors.red.shade700,
+                                  size: 20,
                                 ),
                               ),
-                              const SizedBox(width: 14),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    // Row 1: Direction badge + Status text + Server Timestamp
                                     Row(
                                       children: [
                                         Container(
@@ -606,7 +613,7 @@ class _UserPortalScreenState extends ConsumerState<UserPortalScreen> {
                                             borderRadius: BorderRadius.circular(4),
                                           ),
                                           child: Text(
-                                            isEntry ? 'VÀO CA (ENTRY)' : 'TAN CA (EXIT)',
+                                            isEntry ? 'VÀO CA' : 'TAN CA',
                                             style: TextStyle(
                                               fontSize: 10,
                                               fontWeight: FontWeight.bold,
@@ -614,43 +621,80 @@ class _UserPortalScreenState extends ConsumerState<UserPortalScreen> {
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            isApproved ? 'HỢP LỆ' : 'BỊ TỪ CHỐI',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: isApproved ? Colors.green.shade700 : Colors.red.shade700,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
                                         Text(
-                                          isApproved ? 'HỢP LỆ • CỔNG ĐÃ MỞ' : 'BỊ TỪ CHỐI',
+                                          ev.serverTimestamp.toLocal().toString().split('.').first,
                                           style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            color: isApproved ? Colors.green.shade700 : Colors.red.shade700,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.grey.shade600,
                                           ),
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Trạm: ${ev.stationId} (${ev.factoryId ?? "N/A"})',
-                                      style: TextStyle(fontSize: 12, color: Colors.blueGrey.shade700),
+                                    const SizedBox(height: 6),
+                                    // Row 2: Station + Outcome
+                                    Row(
+                                      children: [
+                                        Icon(Icons.meeting_room_outlined, size: 14, color: Colors.blueGrey.shade500),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            '${ev.stationId} (${ev.factoryId ?? "N/A"})',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.blueGrey.shade800,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.shade100,
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            ev.controllerOutcome.name,
+                                            style: TextStyle(fontSize: 10, color: Colors.grey.shade700),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    if (ev.denialReason != null)
-                                      Text(
-                                        'Lý do từ chối: ${ev.denialReason}',
-                                        style: TextStyle(fontSize: 11, color: Colors.red.shade700),
+                                    if (ev.denialReason != null) ...[
+                                      const SizedBox(height: 6),
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade50,
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: Colors.red.shade200),
+                                        ),
+                                        child: Text(
+                                          'Lý do từ chối: ${ev.denialReason}',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.red.shade800,
+                                          ),
+                                        ),
                                       ),
+                                    ],
                                   ],
                                 ),
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    ev.serverTimestamp.toLocal().toString().split('.').first,
-                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    ev.controllerOutcome.name,
-                                    style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
-                                  ),
-                                ],
                               ),
                             ],
                           ),
