@@ -18,7 +18,7 @@ class ApiEndpointPreset {
 }
 
 class ApiConfig {
-  static const String fallbackBaseUrl = 'http://localhost:3000/api';
+  static const String fallbackBaseUrl = 'https://software-architecture-co3017-be.onrender.com/api';
 
   // Ưu tiên biến môi trường truyền qua --dart-define hoặc --dart-define-from-file=.env
   static const String _envDefine =

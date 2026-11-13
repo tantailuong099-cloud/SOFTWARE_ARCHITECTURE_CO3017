@@ -89,83 +89,78 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: Colors.indigo.shade50,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
                           Icons.manage_accounts_rounded,
                           color: Colors.indigo,
-                          size: 26,
+                          size: 22,
                         ),
                       ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Quản Lý Tài Khoản Người Dùng',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF0F172A),
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Quản lý danh sách nhân sự, phân quyền vai trò và cấp phép truy cập cổng trạm TMC',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.blueGrey.shade600,
-                              ),
-                            ),
-                          ],
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Quản Lý Người Dùng',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       IconButton.filledTonal(
                         onPressed: state.isLoading ? null : () => notifier.loadUsers(),
-                        icon: const Icon(Icons.refresh_rounded, size: 20),
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
                         tooltip: 'Tải lại danh sách',
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        padding: EdgeInsets.zero,
                       ),
                       const SizedBox(width: 8),
                       FilledButton.icon(
                         onPressed: () => _showAddUserDialog(context),
-                        icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
-                        label: const Text('Thêm người dùng'),
+                        icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
+                        label: const Text('Thêm', style: TextStyle(fontSize: 12)),
                         style: FilledButton.styleFrom(
                           backgroundColor: Colors.indigo.shade700,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Quản lý nhân sự, phân quyền vai trò và trạng thái truy cập cổng TMC',
+                    style: TextStyle(fontSize: 12, color: Colors.blueGrey.shade600),
+                  ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
 
                   // Quick Stats Row
                   Row(
                     children: [
                       _buildStatCard(
-                        title: 'Tổng số tài khoản',
+                        title: 'Tổng số',
                         count: state.totalCount,
                         color: Colors.indigo,
                         icon: Icons.people_alt_rounded,
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
                       _buildStatCard(
-                        title: 'Đang hoạt động',
+                        title: 'Hoạt động',
                         count: state.activeCount,
                         color: Colors.teal,
                         icon: Icons.check_circle_outline_rounded,
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
                       _buildStatCard(
-                        title: 'Đang tạm ngưng',
+                        title: 'Tạm ngưng',
                         count: state.suspendedCount,
                         color: Colors.redAccent,
                         icon: Icons.block_rounded,
@@ -173,97 +168,96 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                     ],
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
 
-                  // Search and Filters
-                  Row(
+                  // Search and Filters (2 rows for responsive layout)
+                  Column(
                     children: [
-                      Expanded(
-                        flex: 3,
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: notifier.setSearchQuery,
-                          decoration: InputDecoration(
-                            hintText: 'Tìm kiếm theo tên, mã NV, email...',
-                            prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                            suffixIcon: _searchController.text.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Icons.clear, size: 18),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      notifier.setSearchQuery('');
-                                    },
-                                  )
-                                : null,
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                            filled: true,
-                            fillColor: const Color(0xFFF1F5F9),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide.none,
-                            ),
+                      TextField(
+                        controller: _searchController,
+                        onChanged: notifier.setSearchQuery,
+                        decoration: InputDecoration(
+                          hintText: 'Tìm kiếm theo tên, mã NV, email...',
+                          prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 18),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    notifier.setSearchQuery('');
+                                  },
+                                )
+                              : null,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                          filled: true,
+                          fillColor: const Color(0xFFF1F5F9),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      // Role filter dropdown
-                      Expanded(
-                        flex: 2,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: state.roleFilter,
-                              isExpanded: true,
-                              icon: const Icon(Icons.filter_list_rounded, size: 18),
-                              style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B)),
-                              onChanged: (val) {
-                                if (val != null) notifier.setRoleFilter(val);
-                              },
-                              items: const [
-                                DropdownMenuItem(value: 'ALL', child: Text('Tất cả vai trò')),
-                                DropdownMenuItem(value: 'ADMIN', child: Text('Quản trị viên (ADMIN)')),
-                                DropdownMenuItem(value: 'EMPLOYEE', child: Text('Nhân viên (EMPLOYEE)')),
-                                DropdownMenuItem(value: 'SECURITY_GUARD', child: Text('Bảo vệ (SECURITY)')),
-                                DropdownMenuItem(value: 'SUPERVISOR', child: Text('Giám sát (SUPERVISOR)')),
-                                DropdownMenuItem(value: 'HR_STAFF', child: Text('Nhân sự (HR)')),
-                              ],
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          // Role filter dropdown
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: state.roleFilter,
+                                  isExpanded: true,
+                                  icon: const Icon(Icons.filter_list_rounded, size: 16),
+                                  style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)),
+                                  onChanged: (val) {
+                                    if (val != null) notifier.setRoleFilter(val);
+                                  },
+                                  items: const [
+                                    DropdownMenuItem(value: 'ALL', child: Text('Tất cả vai trò')),
+                                    DropdownMenuItem(value: 'ADMIN', child: Text('Admin')),
+                                    DropdownMenuItem(value: 'EMPLOYEE', child: Text('Nhân viên')),
+                                    DropdownMenuItem(value: 'SECURITY_GUARD', child: Text('Bảo vệ')),
+                                    DropdownMenuItem(value: 'SUPERVISOR', child: Text('Giám sát')),
+                                    DropdownMenuItem(value: 'HR_STAFF', child: Text('Nhân sự')),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      // Status filter dropdown
-                      Expanded(
-                        flex: 2,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: state.statusFilter,
-                              isExpanded: true,
-                              icon: const Icon(Icons.toggle_on_outlined, size: 18),
-                              style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B)),
-                              onChanged: (val) {
-                                if (val != null) notifier.setStatusFilter(val);
-                              },
-                              items: const [
-                                DropdownMenuItem(value: 'ALL', child: Text('Mọi trạng thái')),
-                                DropdownMenuItem(value: 'ACTIVE', child: Text('Đang hoạt động')),
-                                DropdownMenuItem(value: 'SUSPENDED', child: Text('Tạm ngưng')),
-                              ],
+                          const SizedBox(width: 8),
+                          // Status filter dropdown
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: state.statusFilter,
+                                  isExpanded: true,
+                                  icon: const Icon(Icons.toggle_on_outlined, size: 16),
+                                  style: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)),
+                                  onChanged: (val) {
+                                    if (val != null) notifier.setStatusFilter(val);
+                                  },
+                                  items: const [
+                                    DropdownMenuItem(value: 'ALL', child: Text('Mọi trạng thái')),
+                                    DropdownMenuItem(value: 'ACTIVE', child: Text('Đang hoạt động')),
+                                    DropdownMenuItem(value: 'SUSPENDED', child: Text('Đang tạm ngưng')),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
                     ],
                   ),
@@ -352,34 +346,35 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   }) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         decoration: BoxDecoration(
           color: color.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: color.withOpacity(0.2)),
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 color: color.withOpacity(0.12),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: color, size: 18),
+              child: Icon(icon, color: color, size: 16),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    style: TextStyle(fontSize: 11, color: Colors.blueGrey.shade700, fontWeight: FontWeight.w500),
+                    style: TextStyle(fontSize: 10, color: Colors.blueGrey.shade700, fontWeight: FontWeight.w500),
+                    overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    '$count',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),
+                    '',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color),
                   ),
                 ],
               ),
@@ -395,194 +390,221 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     final isActive = user.isActive;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 10),
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: Colors.grey.shade200),
       ),
       color: Colors.white,
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Avatar
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: roleColor.withOpacity(0.12),
-              child: Text(
-                user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : 'U',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                  color: roleColor,
-                ),
-              ),
-            ),
-            const SizedBox(width: 14),
-
-            // User Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          user.fullName,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // Role chip
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: roleColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: roleColor.withOpacity(0.3)),
-                        ),
-                        child: Text(
-                          user.role,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: roleColor,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      // Status Chip
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: isActive ? Colors.green.shade50 : Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: isActive ? Colors.green.shade300 : Colors.red.shade300,
-                          ),
-                        ),
-                        child: Text(
-                          isActive ? 'ACTIVE' : 'SUSPENDED',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: isActive ? Colors.green.shade700 : Colors.red.shade700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(Icons.badge_outlined, size: 14, color: Colors.blueGrey.shade400),
-                      const SizedBox(width: 4),
-                      Text(
-                        user.employeeCode,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.blueGrey.shade700,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Icon(Icons.email_outlined, size: 14, color: Colors.blueGrey.shade400),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          user.email,
-                          style: TextStyle(fontSize: 12, color: Colors.blueGrey.shade600),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (user.factoryId != null) ...[
-                        const SizedBox(width: 14),
-                        Icon(Icons.factory_outlined, size: 14, color: Colors.blueGrey.shade400),
-                        const SizedBox(width: 4),
-                        Text(
-                          user.factoryId == 'BINH_DUONG' ? 'Bình Dương' : (user.factoryId == 'LONG_AN' ? 'Long An' : user.factoryId!),
-                          style: TextStyle(fontSize: 12, color: Colors.blueGrey.shade600),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(width: 10),
-
-            // Actions
-            IconButton.outlined(
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              tooltip: 'Chỉnh sửa tài khoản',
-              onPressed: () => _showEditUserDialog(context, user),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.tonalIcon(
-              onPressed: () async {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: Text(isActive ? 'Tạm ngưng tài khoản?' : 'Kích hoạt tài khoản?'),
-                    content: Text(
-                      isActive
-                          ? 'Người dùng ${user.fullName} (${user.employeeCode}) sẽ bị khóa thẻ và không thể quét qua cổng.'
-                          : 'Kích hoạt lại tài khoản ${user.fullName} để cho phép quét thẻ qua cổng trạm.',
+            // Top Row: Avatar + Name & Code + Actions
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: roleColor.withOpacity(0.12),
+                  child: Text(
+                    user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : 'U',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: roleColor,
                     ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: const Text('Hủy'),
-                      ),
-                      FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: isActive ? Colors.red : Colors.green,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.fullName,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
                         ),
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child: Text(isActive ? 'Khóa tài khoản' : 'Kích hoạt'),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(Icons.badge_outlined, size: 12, color: Colors.blueGrey.shade400),
+                          const SizedBox(width: 4),
+                          Text(
+                            user.employeeCode,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.blueGrey.shade700,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                );
-
-                if (confirm == true) {
-                  final ok = await ref.read(userManagementProvider.notifier).toggleUserStatus(user.id);
-                  if (context.mounted && ok) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Đã cập nhật trạng thái của ${user.fullName}'),
-                        backgroundColor: Colors.teal,
+                ),
+                // Edit button
+                IconButton.outlined(
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  tooltip: 'Chỉnh sửa tài khoản',
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  padding: EdgeInsets.zero,
+                  onPressed: () => _showEditUserDialog(context, user),
+                ),
+                const SizedBox(width: 6),
+                // Lock / Unlock button
+                FilledButton.tonalIcon(
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: Text(isActive ? 'Tạm ngưng tài khoản?' : 'Kích hoạt tài khoản?'),
+                        content: Text(
+                          isActive
+                              ? 'Người dùng ${user.fullName} (${user.employeeCode}) sẽ bị khóa thẻ và không thể quét qua cổng.'
+                              : 'Kích hoạt lại tài khoản ${user.fullName} để cho phép quét thẻ qua cổng trạm.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Hủy'),
+                          ),
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: isActive ? Colors.red : Colors.green,
+                            ),
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: Text(isActive ? 'Khóa' : 'Kích hoạt'),
+                          ),
+                        ],
                       ),
                     );
-                  }
-                }
-              },
-              icon: Icon(
-                isActive ? Icons.lock_outline_rounded : Icons.lock_open_rounded,
-                size: 16,
-                color: isActive ? Colors.red.shade700 : Colors.green.shade700,
-              ),
-              label: Text(
-                isActive ? 'Khóa' : 'Kích hoạt',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: isActive ? Colors.red.shade700 : Colors.green.shade700,
+
+                    if (confirm == true) {
+                      final ok = await ref.read(userManagementProvider.notifier).toggleUserStatus(user.id);
+                      if (context.mounted && ok) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Đã cập nhật trạng thái của '),
+                            backgroundColor: Colors.teal,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  icon: Icon(
+                    isActive ? Icons.lock_outline_rounded : Icons.lock_open_rounded,
+                    size: 14,
+                    color: isActive ? Colors.red.shade700 : Colors.green.shade700,
+                  ),
+                  label: Text(
+                    isActive ? 'Khóa' : 'Kích hoạt',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: isActive ? Colors.red.shade700 : Colors.green.shade700,
+                    ),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: isActive ? Colors.red.shade50 : Colors.green.shade50,
+                    side: BorderSide(color: isActive ? Colors.red.shade200 : Colors.green.shade200),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                 ),
-              ),
-              style: FilledButton.styleFrom(
-                backgroundColor: isActive ? Colors.red.shade50 : Colors.green.shade50,
-                side: BorderSide(color: isActive ? Colors.red.shade200 : Colors.green.shade200),
-              ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            // Middle: Role, Status, and Factory Badges
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                // Role badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: roleColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: roleColor.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    user.role,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: roleColor,
+                    ),
+                  ),
+                ),
+                // Status badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isActive ? Colors.green.shade50 : Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: isActive ? Colors.green.shade300 : Colors.red.shade300,
+                    ),
+                  ),
+                  child: Text(
+                    isActive ? 'HOẠT ĐỘNG' : 'TẠM NGƯNG',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: isActive ? Colors.green.shade700 : Colors.red.shade700,
+                    ),
+                  ),
+                ),
+                if (user.factoryId != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.factory_outlined, size: 11, color: Colors.blueGrey.shade600),
+                        const SizedBox(width: 3),
+                        Text(
+                          user.factoryId == 'BINH_DUONG'
+                              ? 'Bình Dương'
+                              : (user.factoryId == 'LONG_AN' ? 'Long An' : user.factoryId!),
+                          style: TextStyle(fontSize: 10, color: Colors.blueGrey.shade700),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+
+            const SizedBox(height: 6),
+
+            // Bottom: Email
+            Row(
+              children: [
+                Icon(Icons.email_outlined, size: 12, color: Colors.blueGrey.shade400),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    user.email,
+                    style: TextStyle(fontSize: 11, color: Colors.blueGrey.shade600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
           ],
         ),

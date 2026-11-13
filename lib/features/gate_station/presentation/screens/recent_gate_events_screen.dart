@@ -98,24 +98,27 @@ class RecentGateEventsScreen extends ConsumerWidget {
 
                   // Station Picker & Info Banner
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.location_on_outlined, size: 18, color: Colors.indigo),
-                        const SizedBox(width: 8),
+                        const Icon(Icons.location_on_outlined, size: 16, color: Colors.indigo),
+                        const SizedBox(width: 6),
                         const Text(
-                          'Trạm đang chọn: ',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          'Trạm: ',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                         ),
-                        Text(
-                          '${station.stationId} • ${station.gateIdentifier}',
-                          style: TextStyle(fontSize: 13, color: Colors.indigo.shade900),
+                        Expanded(
+                          child: Text(
+                            '${station.stationId} • ${station.gateIdentifier}',
+                            style: TextStyle(fontSize: 12, color: Colors.indigo.shade900, fontWeight: FontWeight.w500),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        const Spacer(),
+                        const SizedBox(width: 8),
                         PopupMenuButton<String>(
                           tooltip: 'Đổi trạm xem sự kiện',
                           constraints: const BoxConstraints(minWidth: 260, maxWidth: 340),
@@ -245,11 +248,11 @@ class RecentGateEventsScreen extends ConsumerWidget {
     final isEntry = event.direction == GateDirection.entry;
 
     final controllerLabel = switch (event.controllerOutcome) {
-      ControllerOutcome.controllerConfirmed => 'Barie: Đã Mở (Confirmed)',
-      ControllerOutcome.controllerFailed => 'Barie: Lỗi (Failed)',
-      ControllerOutcome.controllerUnknown => 'Barie: Chưa rõ (Unknown)',
-      ControllerOutcome.controllerPending => 'Barie: Đang mở (Pending)',
-      ControllerOutcome.notApplicable => 'Barie: Không áp dụng',
+      ControllerOutcome.controllerConfirmed => 'Barie: Đã mở',
+      ControllerOutcome.controllerFailed => 'Barie: Lỗi',
+      ControllerOutcome.controllerUnknown => 'Barie: Chưa rõ',
+      ControllerOutcome.controllerPending => 'Barie: Đang mở',
+      ControllerOutcome.notApplicable => 'Barie: K/A',
     };
 
     return Card(
@@ -263,34 +266,37 @@ class RecentGateEventsScreen extends ConsumerWidget {
       ),
       color: Colors.white,
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             CircleAvatar(
-              radius: 20,
+              radius: 18,
               backgroundColor: isApproved ? Colors.green.shade50 : Colors.red.shade50,
               child: Icon(
                 isApproved ? Icons.check_circle_rounded : Icons.block_rounded,
                 color: isApproved ? Colors.green.shade700 : Colors.red.shade700,
-                size: 22,
+                size: 20,
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Text(
-                        event.employeeName ?? 'Không rõ tên nhân viên',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      Flexible(
+                        child: Text(
+                          event.employeeName ?? 'Không rõ tên nhân viên',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       if (event.employeeId != null)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                           decoration: BoxDecoration(
                             color: Colors.blueGrey.shade50,
                             borderRadius: BorderRadius.circular(4),
@@ -298,7 +304,7 @@ class RecentGateEventsScreen extends ConsumerWidget {
                           child: Text(
                             event.employeeId!,
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 10,
                               fontWeight: FontWeight.bold,
                               color: Colors.blueGrey.shade800,
                             ),
@@ -307,18 +313,18 @@ class RecentGateEventsScreen extends ConsumerWidget {
                       const Spacer(),
                       // Status Badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                         decoration: BoxDecoration(
                           color: isApproved ? Colors.green.shade50 : Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(4),
                           border: Border.all(
                             color: isApproved ? Colors.green.shade300 : Colors.red.shade300,
                           ),
                         ),
                         child: Text(
-                          isApproved ? 'APPROVED' : 'DENIED',
+                          isApproved ? 'HỢP LỆ' : 'TỪ CHỐI',
                           style: TextStyle(
-                            fontSize: 10,
+                            fontSize: 9,
                             fontWeight: FontWeight.bold,
                             color: isApproved ? Colors.green.shade800 : Colors.red.shade800,
                           ),
@@ -327,7 +333,10 @@ class RecentGateEventsScreen extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -344,25 +353,36 @@ class RecentGateEventsScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
                       Text(
                         'Trạm: ${event.stationId} (${event.factoryId ?? "N/A"})',
-                        style: TextStyle(fontSize: 12, color: Colors.blueGrey.shade700),
+                        style: TextStyle(fontSize: 11, color: Colors.blueGrey.shade700),
                       ),
-                      const SizedBox(width: 10),
-                      Text(
-                        controllerLabel,
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: isApproved ? Colors.green.shade50 : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          controllerLabel,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: isApproved ? Colors.green.shade800 : Colors.grey.shade700,
+                          ),
+                        ),
                       ),
                     ],
                   ),
                   if (!isApproved && event.denialReason != null) ...[
                     const SizedBox(height: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.red.shade50,
                         borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.red.shade200),
                       ),
                       child: Text(
                         'Lý do từ chối: ${event.denialReason}',
@@ -372,7 +392,7 @@ class RecentGateEventsScreen extends ConsumerWidget {
                   ],
                   const SizedBox(height: 6),
                   Text(
-                    'Thời gian: ${event.serverTimestamp.toLocal().toString().split('.').first} • ID: ${event.eventId.substring(0, event.eventId.length > 8 ? 8 : event.eventId.length)}...',
+                    'Thời gian: ${event.serverTimestamp.toLocal().toString().split(".").first} • ID: ${event.eventId.substring(0, event.eventId.length > 8 ? 8 : event.eventId.length)}...',
                     style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
                   ),
                 ],
