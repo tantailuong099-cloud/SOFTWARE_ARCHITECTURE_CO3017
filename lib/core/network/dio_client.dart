@@ -1,10 +1,9 @@
-import 'dart:convert';
-
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:tmc_gate_app/core/config/api_config.dart';
-import 'package:tmc_gate_app/core/config/api_endpoint_settings.dart';
+import 'package:tmc_gate_app/core/config/api_endpoint.dart';
+import 'package:tmc_gate_app/core/config/scoped_access_token.dart';
 
 final dioProvider = Provider<Dio>((ref) {
   final endpoint = ref.watch(initialApiEndpointProvider);
@@ -13,41 +12,47 @@ final dioProvider = Provider<Dio>((ref) {
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) async {
-        // Bỏ qua Authorization cho các endpoint login và refresh token
-        if (options.path.contains('/auth/login') ||
-            options.path.contains('/auth/refresh')) {
+        options.headers.removeWhere(
+          (name, _) => name.toLowerCase() == 'authorization',
+        );
+        // Authenticate only requests built relative to the configured API.
+        if (!options.path.startsWith('/') ||
+            options.path.startsWith('//') ||
+            options.path.contains('\\')) {
           return handler.next(options);
         }
 
-        // Lấy token trực tiếp từ secure storage, phá vỡ vòng lặp phụ thuộc (circular dependency)
-        // giữa dioProvider và authNotifierProvider
         try {
-          const storage = FlutterSecureStorage();
-          final stored = await storage.read(key: 'access_token');
-          if (stored != null && stored.isNotEmpty) {
-            String? token;
-            String? tokenEndpoint;
-            if (stored.startsWith('{')) {
-              final val = jsonDecode(stored);
-              token = val['token']?.toString();
-              tokenEndpoint = val['endpoint']?.toString();
-            } else {
-              token = stored;
-            }
-
-            // Kiểm tra issuer tương ứng endpoint trước khi thêm bearer
-            final currentBase = options.baseUrl.isNotEmpty ? options.baseUrl : dio.options.baseUrl;
-            final isMatchingEndpoint = tokenEndpoint == null ||
-                tokenEndpoint.isEmpty ||
-                tokenEndpoint == currentBase ||
-                Uri.tryParse(tokenEndpoint)?.host == Uri.tryParse(currentBase)?.host;
-
-            if (token != null && token.isNotEmpty && isMatchingEndpoint) {
-              options.headers['Authorization'] = 'Bearer $token';
-            }
+          final requestEndpoint = ApiEndpoint.parse(options.baseUrl);
+          final requestUri = options.uri;
+          final base = requestEndpoint.uri;
+          if (requestUri.origin != base.origin ||
+              !requestUri.path.startsWith('${base.path}/') ||
+              requestUri.pathSegments.any(
+                (segment) =>
+                    segment.contains('/') ||
+                    segment.contains('\\') ||
+                    segment == '.' ||
+                    segment == '..',
+              )) {
+            return handler.next(options);
           }
-        } catch (_) {}
+          final route = requestUri.path.substring(base.path.length);
+          if (route == '/auth/login' || route == '/auth/refresh') {
+            return handler.next(options);
+          }
 
+          const storage = FlutterSecureStorage();
+          final session = await readScopedAccessToken(storage);
+          if (session != null &&
+              session.endpoint == requestEndpoint &&
+              requestEndpoint == ApiEndpoint.parse(dio.options.baseUrl)) {
+            options.headers['Authorization'] = 'Bearer ${session.token}';
+            options.followRedirects = false;
+          }
+        } on Exception {
+          // A missing or invalid session leaves the request unauthenticated.
+        }
         return handler.next(options);
       },
     ),

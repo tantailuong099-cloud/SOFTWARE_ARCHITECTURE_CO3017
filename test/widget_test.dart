@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tmc_gate_app/app/app.dart';
 import 'package:tmc_gate_app/core/network/dio_client.dart';
 import 'package:tmc_gate_app/features/auth/presentation/screens/login_screen.dart';
-import 'package:tmc_gate_app/features/home/presentation/screens/main_shell_screen.dart';
+import 'package:tmc_gate_app/features/home/presentation/screens/user_portal_screen.dart';
 
 void main() {
   testWidgets('TMC Gate App opens sign-in when no session is stored', (
@@ -19,17 +21,22 @@ void main() {
     expect(find.byType(LoginScreen), findsOneWidget);
   });
 
-  testWidgets('a restored session can open the dashboard from welcome', (
+  testWidgets('a restored employee session opens the user portal', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1280, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    FlutterSecureStorage.setMockInitialValues({
-      'access_token': 'session-fixture',
-    });
     final dio = DioClient.create();
+    FlutterSecureStorage.setMockInitialValues({
+      'access_token': jsonEncode({
+        'token': 'session-fixture',
+        'endpoint': dio.options.baseUrl,
+      }),
+      'user_role': 'EMPLOYEE',
+      'user_email': 'employee@example.org',
+    });
     addTearDown(dio.close);
     dio.interceptors.add(
       InterceptorsWrapper(
@@ -50,13 +57,9 @@ void main() {
         child: const TMCGateApp(),
       ),
     );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Open dashboard'));
     await tester.pump(Duration.zero);
-    // The mounted kiosk animates continuously.
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.byType(MainShellScreen), findsOneWidget);
-    expect(find.textContaining('TMC Gate Station Kiosk'), findsOneWidget);
+    expect(find.byType(UserPortalScreen), findsOneWidget);
   });
 }

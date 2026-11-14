@@ -4,7 +4,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:tmc_gate_app/core/config/api_config.dart';
+import 'package:tmc_gate_app/core/config/api_endpoint.dart';
+import 'package:tmc_gate_app/core/config/scoped_access_token.dart';
 import 'package:tmc_gate_app/core/network/dio_client.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
@@ -18,7 +19,6 @@ class AuthRepository {
 
   AuthRepository(this._dio);
 
-  static const String _keyAccessToken = 'access_token';
   static const String _keyRefreshToken = 'refresh_token';
   static const String _keyUserRole = 'user_role';
   static const String _keyUserEmail = 'user_email';
@@ -29,7 +29,10 @@ class AuthRepository {
     try {
       final response = await _dio.post(
         '/auth/login',
-        data: {'email': email.trim().toLowerCase(), 'password': password.trim()},
+        data: {
+          'email': email.trim().toLowerCase(),
+          'password': password.trim(),
+        },
         options: Options(followRedirects: false),
       );
 
@@ -37,8 +40,8 @@ class AuthRepository {
         throw const FormatException('Phản hồi đăng nhập không hợp lệ');
       }
 
-      final issuer = response.requestOptions.baseUrl;
-      if (issuer != _dio.options.baseUrl) {
+      final issuer = ApiEndpoint.parse(response.requestOptions.baseUrl);
+      if (issuer != ApiEndpoint.parse(_dio.options.baseUrl)) {
         throw const FormatException(
           'The backend address changed. Sign in again.',
         );
@@ -64,8 +67,8 @@ class AuthRepository {
       final empCode = user['employeeCode'] as String? ?? '';
 
       await _secureStorage.write(
-        key: _keyAccessToken,
-        value: jsonEncode({'token': accessToken, 'endpoint': issuer}),
+        key: accessTokenStorageKey,
+        value: jsonEncode({'token': accessToken, 'endpoint': issuer.value}),
       );
       await _secureStorage.write(key: _keyRefreshToken, value: refreshToken);
       await _secureStorage.write(key: _keyUserRole, value: role);
@@ -85,7 +88,9 @@ class AuthRepository {
       final message = serverMsg is List
           ? serverMsg.join(', ')
           : serverMsg ?? e.message ?? 'Đăng nhập thất bại';
-      debugPrint('[Auth API Failed] URL: ${e.requestOptions.uri} | Status: ${e.response?.statusCode} | Lý do từ Server: $message');
+      debugPrint(
+        '[Auth API Failed] URL: ${e.requestOptions.uri} | Status: ${e.response?.statusCode} | Lý do từ Server: $message',
+      );
       throw Exception(message);
     } catch (e) {
       debugPrint('[Auth API Failed] Invalid login response: $e');
@@ -94,8 +99,9 @@ class AuthRepository {
   }
 
   Future<Map<String, String?>> getStoredUserData() async {
-    final session = await _readAccessSession();
-    if (session == null || session.endpoint != _dio.options.baseUrl) {
+    final session = await readScopedAccessToken(_secureStorage);
+    if (session == null ||
+        session.endpoint != ApiEndpoint.parse(_dio.options.baseUrl)) {
       return const {};
     }
     final role = await _secureStorage.read(key: _keyUserRole);
@@ -103,7 +109,9 @@ class AuthRepository {
     final name = await _secureStorage.read(key: _keyUserName);
     final employeeCode = await _secureStorage.read(key: _keyEmployeeCode);
 
-    if (session.endpoint != _dio.options.baseUrl) return const {};
+    if (session.endpoint != ApiEndpoint.parse(_dio.options.baseUrl)) {
+      return const {};
+    }
     return {
       'accessToken': session.token,
       'role': role,
@@ -113,30 +121,11 @@ class AuthRepository {
     };
   }
 
-  Future<({String token, String endpoint})?> _readAccessSession() async {
-    final stored = await _secureStorage.read(key: _keyAccessToken);
-    if (stored == null || stored.isEmpty) return null;
-    if (!stored.startsWith('{')) {
-      return (token: stored, endpoint: ApiConfig.defaultBaseUrl);
-    }
-    try {
-      final value = jsonDecode(stored);
-      if (value case {
-        'token': final String token,
-        'endpoint': final String endpoint,
-      } when token.isNotEmpty && endpoint.isNotEmpty) {
-        return (token: token, endpoint: endpoint);
-      }
-    } on FormatException {
-      return null;
-    }
-    return null;
-  }
-
   Future<void> logout() async {
     try {
-      final session = await _readAccessSession();
-      if (session != null && _dio.options.baseUrl == session.endpoint) {
+      final session = await readScopedAccessToken(_secureStorage);
+      if (session != null &&
+          ApiEndpoint.parse(_dio.options.baseUrl) == session.endpoint) {
         await _dio.post(
           '/auth/logout',
           options: Options(

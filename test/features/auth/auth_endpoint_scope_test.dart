@@ -52,25 +52,22 @@ void main() {
     },
   );
 
-  test(
-    'restores a legacy token and scopes logout to the default backend',
-    () async {
-      FlutterSecureStorage.setMockInitialValues({
-        'access_token': 'fixture-token',
-      });
-      final (dio, requests) = _observeAuthRequests(ApiConfig.defaultBaseUrl);
-      final repository = AuthRepository(dio);
-      expect(
-        (await repository.getStoredUserData())['accessToken'],
-        'fixture-token',
-      );
+  test('rejects and clears a legacy token without an issuer', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      'access_token': 'fixture-token',
+    });
+    final (dio, requests) = _observeAuthRequests(ApiConfig.defaultBaseUrl);
+    final repository = AuthRepository(dio);
+    expect(await repository.getStoredUserData(), isEmpty);
 
-      await repository.logout();
+    await repository.logout();
 
-      expect(requests.single.path, '/auth/logout');
-      expect(requests.single.headers['Authorization'], 'Bearer fixture-token');
-    },
-  );
+    expect(requests, isEmpty);
+    expect(
+      await const FlutterSecureStorage().read(key: 'access_token'),
+      isNull,
+    );
+  });
 }
 
 (Dio, List<RequestOptions>) _observeAuthRequests(String endpoint) {
