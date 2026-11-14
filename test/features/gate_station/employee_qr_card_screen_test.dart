@@ -276,7 +276,7 @@ void _expectUnavailable(WidgetTester tester) {
 }
 
 class _CardDependencies {
-  final dio = Dio();
+  final dio = Dio(BaseOptions(baseUrl: 'https://backend.example/api'));
   final source = ControlledDynamicQRSource();
   Duration clockOffset = Duration.zero;
   final scans = <_PendingRequest>[];

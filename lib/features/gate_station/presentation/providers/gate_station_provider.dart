@@ -68,6 +68,7 @@ final gateStationNotifierProvider =
 class GateStationNotifier extends StateNotifier<GateStationState> {
   final GateStationRepository _repository;
   Timer? _resetTimer;
+  bool _syncing = false;
   int _requestCounter = 100;
 
   GateStationNotifier(this._repository)
@@ -139,29 +140,62 @@ class GateStationNotifier extends StateNotifier<GateStationState> {
   }
 
   Future<void> syncOfflineQueue() async {
-    if (state.offlineQueue.isEmpty) {
-      state = state.copyWith(syncStatusMessage: 'Hàng đợi ngoại tuyến trống.');
+    if (_syncing) return;
+    final endpoint = _repository.endpoint;
+    final stationId = state.activeStation.stationId;
+    final batch = state.offlineQueue
+        .where(
+          (scan) => scan.backend == endpoint && scan.stationId == stationId,
+        )
+        .take(25)
+        .toList();
+    if (batch.isEmpty) {
+      state = state.copyWith(
+        syncStatusMessage:
+            'No queued scans for the current backend and station.',
+      );
       return;
     }
 
-    state = state.copyWith(syncStatusMessage: 'Đang đồng bộ hàng đợi ngoại tuyến...');
-    final result = await _repository.syncOfflineScans(
-      state.activeStation.stationId,
-      state.offlineQueue,
-    );
-
-    if (result != null) {
-      final processed = result['processedCount'] ?? 0;
-      final dup = result['duplicateCount'] ?? 0;
+    _syncing = true;
+    state = state.copyWith(syncStatusMessage: 'Checking queued scans...');
+    try {
+      final response = await _repository.syncOfflineScans(stationId, batch);
+      if (!mounted) return;
+      final rows = response?['results'];
+      final sent = {for (final scan in batch) scan.requestId: scan};
+      final statuses = <String, Set<Object?>>{};
+      if ((response?['status'] == 'COMPLETE' ||
+              response?['status'] == 'PARTIAL') &&
+          response?['stationId'] == stationId &&
+          rows is List) {
+        for (final row in rows) {
+          if (row case {
+            'requestId': final String id,
+          } when sent.containsKey(id)) {
+            statuses.putIfAbsent(id, () => {}).add(row['status']);
+          }
+        }
+      }
+      const terminal = {'APPROVED', 'ACCEPTED', 'DENIED', 'DUPLICATE'};
+      final resolved = {
+        for (final entry in statuses.entries)
+          if (entry.value.length == 1 && terminal.contains(entry.value.single))
+            sent[entry.key]!,
+      };
+      final denied = resolved
+          .where((scan) => statuses[scan.requestId]!.single == 'DENIED')
+          .length;
       state = state.copyWith(
-        offlineQueue: [],
+        offlineQueue: state.offlineQueue
+            .where((scan) => !resolved.contains(scan))
+            .toList(),
         syncStatusMessage:
-            'Đồng bộ thành công! ($processed mới, $dup trùng lặp được bỏ qua an toàn)',
+            '${resolved.length} acknowledged ($denied denied). '
+            '${batch.length - resolved.length} still pending from this batch.',
       );
-    } else {
-      state = state.copyWith(
-        syncStatusMessage: 'Đồng bộ thất bại. Vui lòng kiểm tra kết nối máy chủ.',
-      );
+    } finally {
+      _syncing = false;
     }
   }
 
@@ -182,6 +216,7 @@ class GateStationNotifier extends StateNotifier<GateStationState> {
       qrPayload: qrPayload.trim(),
       deviceTimestamp: DateTime.now().toIso8601String(),
       apiKey: state.activeStation.stationApiKey,
+      backend: _repository.endpoint,
     );
 
     // --- M2 Enhancement: Edge Offline Store-and-Forward (ADR-008) ---

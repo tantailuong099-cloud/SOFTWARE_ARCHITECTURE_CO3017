@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tmc_gate_app/core/config/api_endpoint.dart';
 import 'package:tmc_gate_app/core/network/dio_client.dart';
 import '../domain/dynamic_qr_source.dart';
 import 'models/access_scan_models.dart';
@@ -22,6 +23,8 @@ class GateStationRepository implements DynamicQRSource {
   final Dio _dio;
 
   GateStationRepository(this._dio);
+
+  ApiEndpoint get endpoint => ApiEndpoint.parse(_dio.options.baseUrl);
 
   Future<AccessScanResponse> submitAccessScan(SubmitScanRequest request) async {
     try {
@@ -220,7 +223,7 @@ class GateStationRepository implements DynamicQRSource {
     }
   }
 
-  // --- M2 Enhancement: Sync Offline Scans Batch (ADR-008) ---
+  // Legacy raw-scan reconciliation.
   Future<Map<String, dynamic>?> syncOfflineScans(
     String stationId,
     List<SubmitScanRequest> scans,
@@ -229,11 +232,12 @@ class GateStationRepository implements DynamicQRSource {
       final payload = {
         'stationId': stationId,
         'syncTimestamp': DateTime.now().toIso8601String(),
-        'scans': scans.map((s) => s.toJson()).toList(),
+        'scans': scans.map((scan) => scan.toJson()..remove('apiKey')).toList(),
       };
       final response = await _dio.post(
         '/access/sync-offline-scans',
         data: payload,
+        options: Options(followRedirects: false),
       );
       return response.data as Map<String, dynamic>?;
     } catch (e) {

@@ -1,3 +1,5 @@
+import 'package:tmc_gate_app/core/config/api_endpoint.dart';
+
 import '../../domain/gate_event_types.dart' show AccessDecision;
 
 export '../../domain/gate_event_types.dart';
@@ -8,6 +10,7 @@ class SubmitScanRequest {
   final String qrPayload;
   final String? deviceTimestamp;
   final String? apiKey;
+  final ApiEndpoint? backend;
 
   SubmitScanRequest({
     required this.requestId,
@@ -15,6 +18,7 @@ class SubmitScanRequest {
     required this.qrPayload,
     this.deviceTimestamp,
     this.apiKey,
+    this.backend,
   });
 
   Map<String, dynamic> toJson() => {
