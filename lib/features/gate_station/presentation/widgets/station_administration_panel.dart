@@ -55,7 +55,7 @@ class _StationAdministrationPanelState
         ? station.factoryId
         : stationFactoryIds.first;
     _direction = station.direction == 'EXIT' ? 'EXIT' : 'ENTRY';
-    _status = station.status == 'DISABLED' ? 'DISABLED' : 'ACTIVE';
+    _status = station.isActive ? 'ACTIVE' : 'DISABLED';
     _message = null;
   }
 

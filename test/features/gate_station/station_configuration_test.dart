@@ -194,6 +194,8 @@ void main() {
       );
 
       final valid = fields();
+      expect(StationStatus.parse('INACTIVE'), StationStatus.disabled);
+      expect(StationStatus.parse('DISABLED'), StationStatus.disabled);
       expect(valid.gateIdentifier, 'Main gate');
       expect(valid.controllerEndpoint.path, '/unlock/');
       expect(() => fields(gate: ' '), throwsFormatException);
