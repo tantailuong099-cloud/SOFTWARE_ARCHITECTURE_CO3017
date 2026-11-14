@@ -388,7 +388,8 @@ class TurnstileStatusCard extends StatelessWidget {
       case 'UNRECOGNIZED_CREDENTIAL':
         return 'Mã QR không thuộc hệ thống TMC (UNRECOGNIZED)';
       case 'STATION_DISABLED':
-        return 'Trạm kiểm soát đang vô hiệu hóa (STATION_DISABLED)';
+      case 'STATION_INACTIVE':
+        return 'Trạm kiểm soát đang dừng hoạt động (STATION_INACTIVE)';
       default:
         return code;
     }

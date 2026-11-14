@@ -17,17 +17,20 @@ enum StationDirection {
 
 enum StationStatus {
   active('ACTIVE'),
-  disabled('DISABLED');
+  disabled('DISABLED'),
+  inactive('INACTIVE');
 
   final String value;
   const StationStatus(this.value);
 
-  static StationStatus parse(String value) => values.firstWhere(
-    (item) => item.value == value,
-    orElse: () {
-      throw const FormatException('Choose ACTIVE or DISABLED.');
-    },
-  );
+  static StationStatus parse(String value) {
+    final normalized = value.trim().toUpperCase();
+    if (normalized == 'ACTIVE') return StationStatus.active;
+    if (normalized == 'DISABLED' || normalized == 'INACTIVE') {
+      return StationStatus.disabled;
+    }
+    throw FormatException('Choose ACTIVE or DISABLED/INACTIVE (got $value).');
+  }
 }
 
 const stationFactoryIds = ['BINH_DUONG', 'LONG_AN'];

@@ -26,13 +26,23 @@ final dioProvider = Provider<Dio>((ref) {
           final stored = await storage.read(key: 'access_token');
           if (stored != null && stored.isNotEmpty) {
             String? token;
+            String? tokenEndpoint;
             if (stored.startsWith('{')) {
               final val = jsonDecode(stored);
               token = val['token']?.toString();
+              tokenEndpoint = val['endpoint']?.toString();
             } else {
               token = stored;
             }
-            if (token != null && token.isNotEmpty) {
+
+            // Kiểm tra issuer tương ứng endpoint trước khi thêm bearer
+            final currentBase = options.baseUrl.isNotEmpty ? options.baseUrl : dio.options.baseUrl;
+            final isMatchingEndpoint = tokenEndpoint == null ||
+                tokenEndpoint.isEmpty ||
+                tokenEndpoint == currentBase ||
+                Uri.tryParse(tokenEndpoint)?.host == Uri.tryParse(currentBase)?.host;
+
+            if (token != null && token.isNotEmpty && isMatchingEndpoint) {
               options.headers['Authorization'] = 'Bearer $token';
             }
           }
